@@ -4,12 +4,16 @@
 ;; Version: 1.0
 ;; Package-Requires: ((emacs "27") cl-lib dash)
 
-;;
+;; Commentary:
 
 ;; This package provides AI-powered assistance for code generation,
-;; editing, refactoring, and answering questions.  It uses
-;; state-of-the-art machine learning algorithms to analyze code and
-;; provide suggestions for improvements.
+;; editing, refactoring, and answering questions.
+;;
+;; (use-package ancilla
+;;  :straight (:host github :repo "shouya/ancilla.el")
+;;  :custom (ancilla-adaptor-chatgpt-openai-api-key "sk-XXXXXXXXXX")
+;;  :bind ("C-x C-r" . ancilla-rewrite))
+;;
 
 ;;; Code:
 
@@ -138,7 +142,7 @@ desired information."
 (defun ancilla--adaptor-chatgpt-request-buffer-parse ()
   (with-current-buffer (get-buffer-create "*ancilla-chatgpt*")
     (let* ((content (buffer-substring-no-properties (point-min) (point-max)))
-           (messages (split-string content "\f\n" t)))
+           (messages (split-string content "\n\f\n" t)))
       (mapcar (lambda (message)
                 (cond
                  ((string-prefix-p "USER> " message)
@@ -155,7 +159,7 @@ desired information."
     (save-excursion
       (goto-char (point-max))
       (insert (format "%s> " (upcase role)))
-      (insert (format "%s\f\n" text)))))
+      (insert (format "%s\n\f\n" text)))))
 
 (defun ancilla--adaptor-chatgpt-request-buffer-reset ()
   (with-current-buffer (get-buffer-create "*ancilla-chatgpt*")
@@ -165,8 +169,10 @@ desired information."
   (let* ((url-request-method "POST")
          (url-request-extra-headers
           `(("Content-Type" . "application/json")
-            ("Authorization" . ,(concat "Bearer " ancilla-adaptor-chatgpt-openai-api-key))))
-         (messages (mapcar (lambda (x) `(("role" . ,(car x)) ("content" . ,(cdr x))))
+            ("Authorization" .
+             ,(concat "Bearer " ancilla-adaptor-chatgpt-openai-api-key))))
+         (messages (mapcar (lambda (x) `(("role" . ,(car x))
+                                         ("content" . ,(cdr x))))
                            (ancilla--adaptor-chatgpt-request-buffer-parse)))
          (url-request-data
           (json-encode
@@ -199,19 +205,20 @@ BUFFER-CONTEXT: The context about what needs to be rewritten."
   (ancilla--adaptor-chatgpt-request-buffer-append
    "user"
    (concat "Here is the context that may or may not be useful:"
-                  "\n- filename: " (plist-get buffer-context :file-name)
-                  "\n- editor mode: " (plist-get buffer-context :buffer-mode)
-                  ))
+           "\n- filename: " (plist-get buffer-context :file-name)
+           "\n- editor mode: " (plist-get buffer-context :buffer-mode)
+           ))
 
   ;; input
   (ancilla--adaptor-chatgpt-request-buffer-append
    "user"
    (concat (plist-get buffer-context :before-selection)
-                        "<|begin selection|>"
-                        (plist-get buffer-context :selection)
-                        "<|end selection|>"
-                        (plist-get buffer-context :after-selection)
-                        ))
+           "<|begin selection|>"
+           (plist-get buffer-context :selection)
+           "<|end selection|>"
+           (plist-get buffer-context :after-selection)
+           ))
+
   ;; instruction
   (ancilla--adaptor-chatgpt-request-buffer-append
    "user"
@@ -220,7 +227,7 @@ BUFFER-CONTEXT: The context about what needs to be rewritten."
            "\n\nReply with the replacement for SELECTION. "
            "Your response must begin with <|begin replacement|> "
            "and stop at <|end replacement|>. "
-           "Do not include updated code. Preserve original format and indentation.")
+           "Do not include updated code. Preserve original whitespace.")
    )
   (ancilla--adaptor-chatgpt-request-buffer))
 

@@ -22,6 +22,7 @@
 (require 'url)
 (require 'url-http)
 (require 'diff)
+(require 'files)
 
 (defvar url-http-end-of-headers)
 
@@ -97,6 +98,24 @@
   "Delete the window of the buffer with the name \"*ancilla-diff*\"."
   (delete-window (get-buffer-window "*ancilla-diff*")))
 
+(defun ancilla--get-buffer-file-name ()
+  (if-let* ((file-name (buffer-file-name))
+            (root (cond
+                   ((and (fboundp 'projectile-project-root)
+                         (projectile-project-root)))
+                   ((and (fboundp 'ffip-project-root)
+                         (ffip-project-root)))
+                   ((and (fboundp 'project-current)
+                         (fboundp 'project-root)
+                         (project-root (project-current))))
+                   (t 'no-project)))
+            (local-file-name
+             (if (not (eq root 'no-project))
+                 (f-relative file-name (expand-file-name root))
+               (file-name-nondirectory file-name))))
+      local-file-name
+    "(unnamed file)"))
+
 (defun ancilla--get-buffer-context ()
   "Get context, which includes file-name, buffer-mode, selection,
 text before selection, and text after selection."
@@ -104,7 +123,7 @@ text before selection, and text after selection."
   (let* ((get-region (lambda (from to) (buffer-substring-no-properties from to)))
          (region-start (if (not (region-active-p)) (point) (region-beginning)))
          (region-end (if (not (region-active-p)) (point) (region-end))))
-    (list :file-name (buffer-file-name)
+    (list :file-name (ancilla--get-buffer-file-name)
           :buffer-mode (symbol-name major-mode)
           :selection (funcall get-region region-start region-end)
           :before-selection (funcall get-region

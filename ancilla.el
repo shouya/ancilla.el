@@ -11,7 +11,7 @@
 ;;
 ;; (use-package ancilla
 ;;  :straight (:host github :repo "shouya/ancilla.el")
-;;  :custom (ancilla-adaptor-chatgpt-openai-api-key "sk-XXXXXXXXXX")
+;;  :custom (ancilla-adaptor-chat-openai-api-key "sk-XXXXXXXXXX")
 ;;  :bind ("C-x C-r" . ancilla-rewrite))
 ;;
 
@@ -23,6 +23,7 @@
 (require 'url-http)
 (require 'diff)
 (require 'files)
+(require 'let-alist)
 
 (defvar url-http-end-of-headers)
 
@@ -30,21 +31,29 @@
   "Emacs package that uses AI to assist with code generation, editing, refactoring, and answering questions."
   :group 'tools)
 
-(defcustom ancilla-adaptors
-  '(chatgpt codex)
-  "List of adaptors for AI-powered assistance."
-  :type '(repeat symbol)
-  :group 'ancilla)
-
 (defcustom ancilla-adaptor
-  'chatgpt
+  'chat
   "Current adaptor for AI-powered assistance."
   :type 'symbol
+  :group 'ancilla
+  :options '(chat codex))
+
+(defcustom ancilla-adaptor-chat-model
+  "gpt-3.5-turbo"
+  "The model to use."
+  :type 'string
+  :group 'ancilla
+  :options '("gpt-3.5-turbo" "gpt-4"))
+
+(defcustom ancilla-adaptor-chat-api-endpoint
+  "https://api.openai.com/v1/chat/completions"
+  "API endpoint for the OpenAI chat completions."
+  :type 'string
   :group 'ancilla)
 
-(defcustom ancilla-adaptor-chatgpt-openai-api-key
+(defcustom ancilla-adaptor-chat-openai-api-key
   nil
-  "API key for the OpenAI GPT-3 API used by the chatgpt adaptor."
+  "API key for the OpenAI GPT-3 API used by the chat adaptor."
   :type 'string
   :group 'ancilla)
 
@@ -56,24 +65,44 @@
 (defun ancilla-generate ()
   "Generate code using AI-powered suggestions."
   (interactive)
-  (message "Code generation function not yet implemented."))
+  (let* ((instruction (read-string "Instruction: "))
+         (buffer-context (ancilla--get-buffer-context))
+         (old-text (plist-get buffer-context :selection)))
+    (funcall (get ancilla-adaptor 'ancilla-generate)
+             :instruction instruction
+             :buffer-context buffer-context
+             :callback
+             (apply-partially 'ancilla--diff-replace-selection
+                              (plist-get buffer-context :buffer)
+                              (plist-get buffer-context :region-start)
+                              (plist-get buffer-context :region-end)
+                              (plist-get buffer-context :selection)))))
 
 (defun ancilla-rewrite ()
   "Refactor code using AI-powered suggestions."
   (interactive)
   (let* ((instruction (read-string "Instruction: "))
-         (buffer-context (ancilla--get-buffer-context))
-         (refactored-code (funcall (function-get ancilla-adaptor 'ancilla-rewrite)
-                                   :instruction instruction
-                                   :buffer-context buffer-context))
-         (old-code (plist-get buffer-context :selection)))
-    (ancilla--show-diff-changes old-code refactored-code)
-    (when (y-or-n-p "Accept the change? ")
-      (save-excursion
-        (delete-region (region-beginning) (region-end))
-        (insert refactored-code)))
-    (ancilla--hide-diff-changes)))
+         (buffer-context (ancilla--get-buffer-context)))
+    (funcall (get ancilla-adaptor 'ancilla-rewrite)
+             :instruction instruction
+             :buffer-context buffer-context
+             :callback
+             (apply-partially 'ancilla--diff-replace-selection
+                              (plist-get buffer-context :buffer)
+                              (plist-get buffer-context :region-start)
+                              (plist-get buffer-context :region-end)
+                              (plist-get buffer-context :selection)))))
 
+(defun ancilla--diff-replace-selection
+    (buffer region-start region-end old-text new-text)
+  (ancilla--show-diff-changes old-text new-text)
+  (when (y-or-n-p "Accept the change? ")
+    (save-excursion
+      (with-current-buffer buffer
+        (goto-char region-end)
+        (delete-region region-start region-end)
+        (insert new-text))))
+  (ancilla--hide-diff-changes))
 
 (defun ancilla--show-diff-changes (old new)
   (with-current-buffer
@@ -123,17 +152,27 @@ text before selection, and text after selection."
   (let* ((get-region (lambda (from to) (buffer-substring-no-properties from to)))
          (region-start (if (not (region-active-p)) (point) (region-beginning)))
          (region-end (if (not (region-active-p)) (point) (region-end))))
-    (list :file-name (ancilla--get-buffer-file-name)
-          :buffer-mode (symbol-name major-mode)
-          :selection (funcall get-region region-start region-end)
-          :before-selection (funcall get-region
-                                     (max (point-min) (window-start))
-                                     region-start)
-          :after-selection (funcall get-region
-                                    region-end
-                                    (min (point-max) (window-end))))))
+    (list
+     ;; used to provide metadata information to AI
+     :file-name (ancilla--get-buffer-file-name)
+     :buffer-mode (symbol-name major-mode)
 
-(cl-defun ancilla--request-and-extract-json (&key url extract)
+     ;; used to generate the prompt
+     :selection (funcall get-region region-start region-end)
+     :before-selection (funcall get-region
+                                (max (point-min) (window-start))
+                                region-start)
+     :after-selection (funcall get-region
+                               region-end
+                               (min (point-max) (window-end)))
+
+     ;; used to replace result accurately
+     :buffer (current-buffer)
+     :region-start region-start
+     :region-end region-end
+     )))
+
+(cl-defun ancilla--request-and-extract-json (&key url callback)
   "Call 'url-retrieve-synchronously' and parse the json, call extract
 on that json, and return whatever extract returns.
 
@@ -143,23 +182,25 @@ EXTRACT: A function that takes the JSON response and extracts the
 desired information."
   (let ((json-object-type 'plist)
         (json-key-type 'symbol)
-        (json-array-type 'list))
-    (with-current-buffer (url-retrieve-synchronously url t t)
-      (goto-char url-http-end-of-headers)
-      (funcall extract (json-read)))))
+        (json-array-type 'list)
+        (url-callback (lambda (_status)
+                        (goto-char url-http-end-of-headers)
+                        (funcall callback (json-read)))))
+    (url-retrieve url url-callback '() t t)))
 
-(defun ancilla--adaptor-chatgpt-extract-content (json)
-  (plist-get (plist-get (car (plist-get json 'choices)) 'message) 'content))
+(defun ancilla--adaptor-chat-extract-content (json)
 
-(defun ancilla--adaptor-chatgpt-get-text-between (content start end)
+  (let-alist json (let-alist (aref .choices 0) .message.content)))
+
+(defun ancilla--adaptor-chat-get-text-between (content start end)
   "Get the part of CONTENT between START and END"
   (let* ((start-pos (and (string-match start content) (match-end 0)))
          (end-pos (string-match end content start-pos)))
     (when (and start-pos end-pos)
       (substring content start-pos end-pos))))
 
-(defun ancilla--adaptor-chatgpt-request-buffer-parse ()
-  (with-current-buffer (get-buffer-create "*ancilla-chatgpt*")
+(defun ancilla--adaptor-chat-request-buffer-parse ()
+  (with-current-buffer (get-buffer-create "*ancilla-chat*")
     (let* ((content (buffer-substring-no-properties (point-min) (point-max)))
            (messages (split-string content "\n\f\n" t)))
       (mapcar (lambda (message)
@@ -173,55 +214,56 @@ desired information."
                  ))
               messages))))
 
-(defun ancilla--adaptor-chatgpt-request-buffer-append (role text)
-  (with-current-buffer (get-buffer-create "*ancilla-chatgpt*")
+(defun ancilla--adaptor-chat-request-buffer-append (role text)
+  (with-current-buffer (get-buffer-create "*ancilla-chat*")
     (save-excursion
       (goto-char (point-max))
       (insert (format "%s> " (upcase role)))
       (insert (format "%s\n\f\n" text)))))
 
-(defun ancilla--adaptor-chatgpt-request-buffer-reset ()
-  (with-current-buffer (get-buffer-create "*ancilla-chatgpt*")
+(defun ancilla--adaptor-chat-request-buffer-reset ()
+  (with-current-buffer (get-buffer-create "*ancilla-chat*")
     (delete-region (point-min) (point-max))))
 
-(defun ancilla--adaptor-chatgpt-request-buffer ()
+(defun ancilla--adaptor-chat-request-buffer-send (callback)
   (let* ((url-request-method "POST")
          (url-request-extra-headers
           `(("Content-Type" . "application/json")
             ("Authorization" .
-             ,(concat "Bearer " ancilla-adaptor-chatgpt-openai-api-key))))
+             ,(concat "Bearer " ancilla-adaptor-chat-openai-api-key))))
          (messages (mapcar (lambda (x) `(("role" . ,(car x))
                                          ("content" . ,(cdr x))))
-                           (ancilla--adaptor-chatgpt-request-buffer-parse)))
+                           (ancilla--adaptor-chat-request-buffer-parse)))
          (url-request-data
           (json-encode
-           `(:model "gpt-3.5-turbo"
+           `(:model ,ancilla-adaptor-chat-model
                     :messages ,messages
                     :temperature 0.1))))
 
     (ancilla--request-and-extract-json
-     :url "https://api.openai.com/v1/chat/completions"
-     :extract
+     :url ancilla-adaptor-chat-api-endpoint
+     :callback
      (lambda (json)
-       (ancilla--adaptor-chatgpt-request-buffer-append
+       ;; insert the response
+       (ancilla--adaptor-chat-request-buffer-append
         "assistant"
-        (ancilla--adaptor-chatgpt-extract-content json))))
+        (ancilla--adaptor-chat-extract-content json))
 
-    (pcase (last (ancilla--adaptor-chatgpt-request-buffer-parse))
-      (`(("assistant" . ,message))
-       (ancilla--adaptor-chatgpt-get-text-between
-        message
-        "<|begin replacement|>" "<|end replacement|>")))))
+       ;; parse the response
+       (pcase (last (ancilla--adaptor-chat-request-buffer-parse))
+         (`(("assistant" . ,message))
+          (funcall callback message)))))))
 
-(cl-defun ancilla--adaptor-chatgpt-rewrite (&key instruction buffer-context)
-  "Rewrite code using the chatgpt adaptor.
+(cl-defun ancilla--adaptor-chat-rewrite
+    (&key instruction buffer-context callback)
+  "Rewrite code using the chat adaptor.
 
 INSTRUCTION: The instruction to follow when rewriting the code.
 BUFFER-CONTEXT: The context about what needs to be rewritten."
-  (ancilla--adaptor-chatgpt-request-buffer-reset)
+  (ancilla--adaptor-chat-request-buffer-reset)
 
   ;; context prompt
-  (ancilla--adaptor-chatgpt-request-buffer-append
+  (ancilla--adaptor-chat-request-buffer-append
    "user"
    (concat "Here is the context that may or may not be useful:"
            "\n- filename: " (plist-get buffer-context :file-name)
@@ -229,7 +271,7 @@ BUFFER-CONTEXT: The context about what needs to be rewritten."
            ))
 
   ;; input
-  (ancilla--adaptor-chatgpt-request-buffer-append
+  (ancilla--adaptor-chat-request-buffer-append
    "user"
    (concat (plist-get buffer-context :before-selection)
            "<|begin selection|>"
@@ -239,7 +281,7 @@ BUFFER-CONTEXT: The context about what needs to be rewritten."
            ))
 
   ;; instruction
-  (ancilla--adaptor-chatgpt-request-buffer-append
+  (ancilla--adaptor-chat-request-buffer-append
    "user"
    (concat "User selected the region marked by <|begin selection|>/<|end selection|> and asked:\n"
            instruction
@@ -248,12 +290,57 @@ BUFFER-CONTEXT: The context about what needs to be rewritten."
            "and stop at <|end replacement|>. "
            "Do not include updated code. Preserve original whitespace.")
    )
-  (ancilla--adaptor-chatgpt-request-buffer))
+
+  (ancilla--adaptor-chat-request-buffer-send
+   (lambda (message)
+     (ancilla--adaptor-chat-get-text-between
+      message
+      "<|begin replacement|>" "<|end replacement|>"))))
+
+(cl-defun ancilla--adaptor-chat-generate
+    (&key instruction buffer-context callback)
+  "Generate code using the chat adaptor. "
+  (ancilla--adaptor-chat-request-buffer-reset)
+
+  ;; context prompt
+  (ancilla--adaptor-chat-request-buffer-append
+   "user"
+   (concat "Here is the context that may or may not be useful:"
+           "\n- filename: " (plist-get buffer-context :file-name)
+           "\n- editor mode: " (plist-get buffer-context :buffer-mode)
+           ))
+
+  ;; input
+  (ancilla--adaptor-chat-request-buffer-append
+   "user"
+   (concat (plist-get buffer-context :before-selection)
+           "<|cursor|>"
+           (plist-get buffer-context :after-selection)
+           ))
+
+  ;; instruction
+  (ancilla--adaptor-chat-request-buffer-append
+   "user"
+   (concat "User placed their cursor at <|cursor|> and asked:\n"
+           instruction
+           "\n\nReply with code to insert at the cursor, "
+           "beginning with <|begin insertion|> "
+           "and stop at <|end insertion|>. "
+           "Preserve original whitespace.")
+   )
+
+  (ancilla--adaptor-chat-request-buffer-send
+   (lambda (message)
+     (let ((insertion (ancilla--adaptor-chat-get-text-between
+                       message
+                       "<|begin insertion|>" "<|end insertion|>")))
+       (funcall callback insertion)))))
 
 (cl-defun ancilla--adaptor-dummy-rewrite (&key instruction selection)
   "(provide 'bugzilla)")
 
-(function-put 'chatgpt 'ancilla-rewrite 'ancilla--adaptor-chatgpt-rewrite)
+(put 'chat 'ancilla-rewrite 'ancilla--adaptor-chat-rewrite)
+(put 'chat 'ancilla-generate 'ancilla--adaptor-chat-generate)
 
 (provide 'ancilla)
 

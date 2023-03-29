@@ -66,16 +66,13 @@
   "Generate code using AI-powered suggestions."
   (interactive)
   (let* ((instruction (read-string "Instruction: "))
-         (buffer-context (ancilla--get-buffer-context))
-         (old-text (plist-get buffer-context :selection)))
+         (buffer-context (ancilla--get-buffer-context)))
     (funcall (get ancilla-adaptor 'ancilla-generate)
              :instruction instruction
              :buffer-context buffer-context
              :callback
              (apply-partially 'ancilla--diff-replace-selection
-                              (plist-get buffer-context :buffer)
-                              (plist-get buffer-context :region-start)
-                              (plist-get buffer-context :region-end)
+                              (plist-get buffer-context :excursion)
                               (plist-get buffer-context :selection)))))
 
 (defun ancilla-rewrite ()
@@ -88,23 +85,52 @@
              :buffer-context buffer-context
              :callback
              (apply-partially 'ancilla--diff-replace-selection
-                              (plist-get buffer-context :buffer)
-                              (plist-get buffer-context :region-start)
-                              (plist-get buffer-context :region-end)
+                              (plist-get buffer-context :excursion)
                               (plist-get buffer-context :selection)))))
 
-(defun ancilla--diff-replace-selection
-    (buffer region-start region-end old-text new-text)
+(defmacro ancilla--with-excursion (excursion &rest forms)
+  "Execute FORMS with the excursion saved in EXCURSION.
+
+EXCURSION should be a triple generated with:
+
+  `(,(current-buffer) ,(point-marker) ,(mark-marker))"
+
+  `(let ((buffer (nth 0 ,excursion))
+         (point (nth 1 ,excursion))
+         (mark (nth 2 ,excursion)))
+     (save-excursion
+       (with-current-buffer buffer
+         (goto-char point)
+         (push-mark mark t nil)
+         ,@forms
+         (pop-mark)))))
+
+(defun ancilla--diff-replace-selection (excursion old-text new-text)
+  "Replace the current selection with NEW-TEXT.
+
+Show a diff of the changes between OLD-TEXT and NEW-TEXT.  If the
+user accepts the change, the selection is replaced with NEW-TEXT.
+Otherwise, the selection is left unchanged.
+
+One must pass the EXCURSION before the change is made.  See
+'ancilla--with-excursion'."
   (ancilla--show-diff-changes old-text new-text)
   (when (y-or-n-p "Accept the change? ")
-    (save-excursion
-      (with-current-buffer buffer
-        (goto-char region-end)
-        (delete-region region-start region-end)
-        (insert new-text))))
+    (ancilla--with-excursion
+     excursion
+     (when (region-active-p) (delete-region (region-beginning) (region-end)))
+     (insert new-text)))
   (ancilla--hide-diff-changes))
 
 (defun ancilla--show-diff-changes (old new)
+  "Display the diff between OLD and NEW text in a buffer named \"*ancilla-diff*\".
+
+OLD and NEW are strings representing the old and new text,
+respectively.  The function creates two temporary buffers, \"
+*ancilla-diff-old*\" and \" *ancilla-diff-new*\", to store the
+old and new text.  It then generates a diff between these two
+buffers and displays the result in a buffer named
+\"*ancilla-diff*\".  The function returns the diff buffer."
   (with-current-buffer
       (get-buffer-create " *ancilla-diff-old*")
     (delete-region (point-min) (point-max))
@@ -167,9 +193,7 @@ text before selection, and text after selection."
                                (min (point-max) (window-end)))
 
      ;; used to replace result accurately
-     :buffer (current-buffer)
-     :region-start region-start
-     :region-end region-end
+     :excursion `(,(current-buffer) ,(point-marker) ,(mark-marker))
      )))
 
 (cl-defun ancilla--request-and-extract-json (&key url callback)
@@ -293,9 +317,10 @@ BUFFER-CONTEXT: The context about what needs to be rewritten."
 
   (ancilla--adaptor-chat-request-buffer-send
    (lambda (message)
-     (ancilla--adaptor-chat-get-text-between
-      message
-      "<|begin replacement|>" "<|end replacement|>"))))
+     (let ((replacement (ancilla--adaptor-chat-get-text-between
+                         message
+                         "<|begin replacement|>" "<|end replacement|>")))
+       (funcall callback replacement)))))
 
 (cl-defun ancilla--adaptor-chat-generate
     (&key instruction buffer-context callback)

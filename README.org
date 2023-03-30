@@ -4,7 +4,7 @@ Enhance your coding experience with code generation, rewriting, and interactive 
 
 ** Demo
 
-<INSERT demo.gif>
+[[./demo.gif]]
 
 ** Feature Highlights
 

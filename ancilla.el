@@ -161,6 +161,8 @@ buffers and displays the result in a buffer named
   (delete-window (get-buffer-window "*ancilla-diff*")))
 
 (defun ancilla--get-buffer-file-name ()
+  "Get the current file name. Return a relative path when a project
+is detected."
   (if-let* ((file-name (buffer-file-name))
             (root (cond
                    ((and (fboundp 'projectile-project-root)
@@ -179,8 +181,7 @@ buffers and displays the result in a buffer named
     "(unnamed file)"))
 
 (defun ancilla--get-buffer-context ()
-  "Get context, which includes file-name, buffer-mode, selection,
-text before selection, and text after selection."
+  "Get the buffer context (like current selection) needed to complete the task."
   (interactive)
   (let* ((get-region (lambda (from to) (buffer-substring-no-properties from to)))
          (region-start (if (not (region-active-p)) (point) (region-beginning)))
@@ -211,16 +212,17 @@ URL: The URL to retrieve.
 EXTRACT: A function that takes the JSON response and extracts the
 desired information.
 
-You can make this function synchronous by 'ancilla-adaptor-chat-
-"
+You can make this function synchronous by setting 'ancilla-async' to nil."
   (let ((url-callback (lambda (_status)
                         (let ((json-object-type 'alist)
                               (json-key-type 'symbol)
                               (json-array-type 'vector))
                           (goto-char url-http-end-of-headers)
-
                           (funcall callback (json-read))))))
-    (url-retrieve url url-callback '() t t)))
+    (if ancilla-async
+        (url-retrieve url url-callback '() t t)
+      (with-current-buffer (url-retrieve-synchronously url t t)
+        (funcall url-callback nil)))))
 
 (defun ancilla--adaptor-chat-extract-content (json)
   "Get the assistant's message content from JSON."

@@ -63,6 +63,22 @@
   :type 'boolean
   :group 'ancilla)
 
+(defcustom ancilla-show-confirmation 'rewrite-only
+  "Specify when to show confirmation.
+
+Possible values are t (always), 'rewrite-only, 'generate-only, or nil (never)."
+  :type '(choice (const :tag "Always" t)
+                 (const :tag "Only for rewrite" rewrite-only)
+                 (const :tag "Only for generate" generate-only)
+                 (const :tag "Never" nil))
+  :group 'ancilla)
+
+(defcustom ancilla-generate-show-confirmation
+  nil
+  "Whether or not show a confirmation with diff before applying the change."
+  :type 'boolean
+  :group 'ancilla)
+
 
 (defun ancilla-ask ()
   "Ask a coding-related question and get an AI-powered answer."
@@ -79,6 +95,7 @@
              :buffer-context buffer-context
              :callback
              (apply-partially 'ancilla--diff-replace-selection
+                              'generate
                               (plist-get buffer-context :excursion)
                               (plist-get buffer-context :selection)))))
 
@@ -92,8 +109,24 @@
              :buffer-context buffer-context
              :callback
              (apply-partially 'ancilla--diff-replace-selection
+                              'rewrite
                               (plist-get buffer-context :excursion)
                               (plist-get buffer-context :selection)))))
+
+
+(defun ancilla--show-confirmation-p (mode)
+  "Determine whether to show a diff and confirmation message based on the current mode.
+
+MODE should be either 'rewrite' or 'generate'. The
+function checks the value of `ancilla-show-confirmation` and
+returns t if a confirmation message should be shown, or nil
+otherwise."
+  (pcase ancilla-show-confirmation
+    ('t t)
+    ('nil nil)
+    ('rewrite-only (eq mode 'rewrite))
+    ('generate-only (eq mode 'generate))
+    (_ nil)))
 
 (defmacro ancilla--with-excursion (excursion &rest forms)
   "Execute FORMS with the excursion saved in EXCURSION.
@@ -112,22 +145,36 @@ EXCURSION should be a triple generated with:
          ,@forms
          (pop-mark)))))
 
-(defun ancilla--diff-replace-selection (excursion old-text new-text)
+(defun ancilla--replace-selection (excursion new-text)
+  "Replace the current selection with NEW-TEXT in the buffer saved in EXCURSION.
+
+NEW-TEXT is the text to replace the current selection with.  If the
+region is not active, NEW-TEXT will be inserted at the current point
+in the buffer saved in EXCURSION."
+  (ancilla--with-excursion
+   excursion
+   (when (region-active-p)
+     (delete-region (region-beginning) (region-end)))
+   (insert new-text)))
+
+(defun ancilla--diff-replace-selection (mode excursion old-text new-text)
   "Replace the current selection with NEW-TEXT.
 
-Show a diff of the changes between OLD-TEXT and NEW-TEXT.  If the
+Based on the MODE and the 'ancilla-show-confirmation' config,
+show a diff of the changes between OLD-TEXT and NEW-TEXT.  If the
 user accepts the change, the selection is replaced with NEW-TEXT.
 Otherwise, the selection is left unchanged.
 
 One must pass the EXCURSION before the change is made.  See
 'ancilla--with-excursion'."
-  (ancilla--show-diff-changes old-text new-text)
-  (when (y-or-n-p "Accept the change? ")
-    (ancilla--with-excursion
-     excursion
-     (when (region-active-p) (delete-region (region-beginning) (region-end)))
-     (insert new-text)))
-  (ancilla--hide-diff-changes))
+  (if (not (ancilla--show-confirmation-p mode))
+      ;; accept without asking
+      (ancilla--replace-selection excursion new-text)
+    ;; show diff and confirmation
+    (ancilla--show-diff-changes old-text new-text)
+    (when (y-or-n-p "Accept the change? ")
+      (ancilla--replace-selection excursion new-text))
+    (ancilla--hide-diff-changes)))
 
 (defun ancilla--show-diff-changes (old new)
   "Display the diff between OLD and NEW text in a buffer named \"*ancilla-diff*\".
@@ -161,8 +208,9 @@ buffers and displays the result in a buffer named
   (delete-window (get-buffer-window "*ancilla-diff*")))
 
 (defun ancilla--get-buffer-file-name ()
-  "Get the current file name. Return a relative path when a project
-is detected."
+  "Get the current file name.
+
+Return a relative path when a project is detected."
   (if-let* ((file-name (buffer-file-name))
             (root (cond
                    ((and (fboundp 'projectile-project-root)
@@ -238,7 +286,8 @@ You can make this function synchronous by setting 'ancilla-async' to nil."
 (defun ancilla--adaptor-chat-request-buffer-parse ()
   "Parse the *ancilla-chat* buffer into a conversation.
 
-Returns a list of (ROLE . TEXT) pairs, where ROLE is one of \"user\", \"system\", or \"assistant\". TEXT is a string."
+Returns a list of (ROLE . TEXT) pairs, where ROLE is one of
+\"user\", \"system\", or \"assistant\". TEXT is a string."
   (with-current-buffer (get-buffer-create "*ancilla-chat*")
     (let* ((content (buffer-substring-no-properties (point-min) (point-max)))
            (messages (split-string content "\n\f\n" t)))
@@ -256,7 +305,8 @@ Returns a list of (ROLE . TEXT) pairs, where ROLE is one of \"user\", \"system\"
 (defun ancilla--adaptor-chat-request-buffer-append (role text)
   "Append a message to *ancilla-chat* buffer.
 
-See 'ancilla--adaptor-chat-request-buffer-parse' for the use of ROLE and TEXT."
+See 'ancilla--adaptor-chat-request-buffer-parse' for the use of
+ROLE and TEXT."
   (with-current-buffer (get-buffer-create "*ancilla-chat*")
     (save-excursion
       (goto-char (point-max))
@@ -271,7 +321,8 @@ See 'ancilla--adaptor-chat-request-buffer-parse' for the use of ROLE and TEXT."
 (defun ancilla--adaptor-chat-request-buffer-send (callback)
   "Send the conversation in *ancilla-chat* to 'ancilla-adaptor-chat-api-endpoint'.
 
-CALLBACK should take the assistant's reply (string) as the only argument."
+CALLBACK should take the assistant's reply (string) as the only
+argument."
   (let* ((url-request-method "POST")
          (url-request-extra-headers
           `(("Content-Type" . "application/json")

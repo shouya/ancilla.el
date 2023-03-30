@@ -85,6 +85,16 @@ Possible values are t (always), 'rewrite-only, 'generate-only, or nil (never)."
   (interactive)
   (message "Ask a question function not yet implemented."))
 
+(defun ancilla-generate-or-rewrite ()
+  "Generate or rewrite code using AI-powered suggestions.
+
+Calls 'ancilla-generate' of there is no active selection, and
+call 'ancilla-rewrite' otherwise."
+  (interactive)
+  (if (region-active-p)
+      (ancilla-rewrite)
+    (ancilla-generate)))
+
 (defun ancilla-generate ()
   "Generate code using AI-powered suggestions."
   (interactive)

@@ -1,10 +1,10 @@
 ;;; ancilla.el --- Emacs AI assistance for code generation, editing & refactoring. -*- lexical-binding: t; -*-
 
-;; Author: Your Name <your.email@example.com>
+;; Author: Shou Ya <shouya@users.noreply.github.com>
 ;; Version: 1.0
-;; Package-Requires: ((emacs "27") cl-lib dash)
+;; Package-Requires: ((emacs "27") cl-lib)
 
-;; Commentary:
+;;; Commentary:
 
 ;; This package provides AI-powered assistance for code generation,
 ;; editing, refactoring, and answering questions.
@@ -12,7 +12,7 @@
 ;; (use-package ancilla
 ;;  :straight (:host github :repo "shouya/ancilla.el")
 ;;  :custom (ancilla-adaptor-chat-openai-api-key "sk-XXXXXXXXXX")
-;;  :bind ("C-x C-r" . ancilla-rewrite))
+;;  :bind ("C-x C-r" . ancilla-generate-or-rewrite))
 ;;
 
 ;;; Code:

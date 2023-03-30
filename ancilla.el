@@ -36,7 +36,7 @@
   "Current adaptor for AI-powered assistance."
   :type 'symbol
   :group 'ancilla
-  :options '(chat codex))
+  :options '(chat))
 
 (defcustom ancilla-adaptor-chat-model
   "gpt-3.5-turbo"
@@ -56,6 +56,13 @@
   "API key for the OpenAI GPT-3 API used by the chat adaptor."
   :type 'string
   :group 'ancilla)
+
+(defcustom ancilla-async
+  t
+  "Whether or not to use async mode."
+  :type 'boolean
+  :group 'ancilla)
+
 
 (defun ancilla-ask ()
   "Ask a coding-related question and get an AI-powered answer."
@@ -197,33 +204,39 @@ text before selection, and text after selection."
      )))
 
 (cl-defun ancilla--request-and-extract-json (&key url callback)
-  "Call 'url-retrieve-synchronously' and parse the json, call extract
-on that json, and return whatever extract returns.
+  "Request the URL and execute CALLBACK.
 
 URL: The URL to retrieve.
 
 EXTRACT: A function that takes the JSON response and extracts the
-desired information."
-  (let ((json-object-type 'plist)
-        (json-key-type 'symbol)
-        (json-array-type 'list)
-        (url-callback (lambda (_status)
-                        (goto-char url-http-end-of-headers)
-                        (funcall callback (json-read)))))
+desired information.
+
+You can make this function synchronous by 'ancilla-adaptor-chat-
+"
+  (let ((url-callback (lambda (_status)
+                        (let ((json-object-type 'alist)
+                              (json-key-type 'symbol)
+                              (json-array-type 'vector))
+                          (goto-char url-http-end-of-headers)
+
+                          (funcall callback (json-read))))))
     (url-retrieve url url-callback '() t t)))
 
 (defun ancilla--adaptor-chat-extract-content (json)
-
+  "Get the assistant's message content from JSON."
   (let-alist json (let-alist (aref .choices 0) .message.content)))
 
 (defun ancilla--adaptor-chat-get-text-between (content start end)
-  "Get the part of CONTENT between START and END"
+  "Get the part of CONTENT between START and END."
   (let* ((start-pos (and (string-match start content) (match-end 0)))
          (end-pos (string-match end content start-pos)))
     (when (and start-pos end-pos)
       (substring content start-pos end-pos))))
 
 (defun ancilla--adaptor-chat-request-buffer-parse ()
+  "Parse the *ancilla-chat* buffer into a conversation.
+
+Returns a list of (ROLE . TEXT) pairs, where ROLE is one of \"user\", \"system\", or \"assistant\". TEXT is a string."
   (with-current-buffer (get-buffer-create "*ancilla-chat*")
     (let* ((content (buffer-substring-no-properties (point-min) (point-max)))
            (messages (split-string content "\n\f\n" t)))
@@ -239,6 +252,9 @@ desired information."
               messages))))
 
 (defun ancilla--adaptor-chat-request-buffer-append (role text)
+  "Append a message to *ancilla-chat* buffer.
+
+See 'ancilla--adaptor-chat-request-buffer-parse' for the use of ROLE and TEXT."
   (with-current-buffer (get-buffer-create "*ancilla-chat*")
     (save-excursion
       (goto-char (point-max))
@@ -246,10 +262,14 @@ desired information."
       (insert (format "%s\n\f\n" text)))))
 
 (defun ancilla--adaptor-chat-request-buffer-reset ()
+  "Reset the conversation in *ancilla-chat* buffer."
   (with-current-buffer (get-buffer-create "*ancilla-chat*")
     (delete-region (point-min) (point-max))))
 
 (defun ancilla--adaptor-chat-request-buffer-send (callback)
+  "Send the conversation in *ancilla-chat* to 'ancilla-adaptor-chat-api-endpoint'.
+
+CALLBACK should take the assistant's reply (string) as the only argument."
   (let* ((url-request-method "POST")
          (url-request-extra-headers
           `(("Content-Type" . "application/json")
@@ -283,7 +303,9 @@ desired information."
   "Rewrite code using the chat adaptor.
 
 INSTRUCTION: The instruction to follow when rewriting the code.
-BUFFER-CONTEXT: The context about what needs to be rewritten."
+BUFFER-CONTEXT: The context about what needs to be rewritten.
+CALLBACK: The function to call when AI returns.  It accepts the
+replacement text as argument."
   (ancilla--adaptor-chat-request-buffer-reset)
 
   ;; context prompt
@@ -324,7 +346,12 @@ BUFFER-CONTEXT: The context about what needs to be rewritten."
 
 (cl-defun ancilla--adaptor-chat-generate
     (&key instruction buffer-context callback)
-  "Generate code using the chat adaptor. "
+  "Generate code using the chat adaptor.
+
+INSTRUCTION: The instruction to follow when rewriting the code.
+BUFFER-CONTEXT: The context about what needs to be rewritten.
+CALLBACK: The function to call when AI returns.  It accepts the
+generated text as argument."
   (ancilla--adaptor-chat-request-buffer-reset)
 
   ;; context prompt
@@ -360,9 +387,6 @@ BUFFER-CONTEXT: The context about what needs to be rewritten."
                        message
                        "<|begin insertion|>" "<|end insertion|>")))
        (funcall callback insertion)))))
-
-(cl-defun ancilla--adaptor-dummy-rewrite (&key instruction selection)
-  "(provide 'bugzilla)")
 
 (put 'chat 'ancilla-rewrite 'ancilla--adaptor-chat-rewrite)
 (put 'chat 'ancilla-generate 'ancilla--adaptor-chat-generate)

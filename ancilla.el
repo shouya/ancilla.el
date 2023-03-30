@@ -79,7 +79,7 @@ Possible values are t (always), 'rewrite-only, 'generate-only, or nil (never)."
   :type 'boolean
   :group 'ancilla)
 
-
+;; ------------- PUBLIC COMMANDS ---------------
 (defun ancilla-ask ()
   "Ask a coding-related question and get an AI-powered answer."
   (interactive)
@@ -124,13 +124,14 @@ call 'ancilla-rewrite' otherwise."
                               (plist-get buffer-context :selection)))))
 
 
-(defun ancilla--show-confirmation-p (mode)
-  "Determine whether to show a diff and confirmation message based on the current mode.
+;; ------------ PRIVATE FUNCTIONS --------------
 
-MODE should be either 'rewrite' or 'generate'. The
-function checks the value of `ancilla-show-confirmation` and
-returns t if a confirmation message should be shown, or nil
-otherwise."
+(defun ancilla--show-confirmation-p (mode)
+  "Determine whether to show confirmation based on the current mode.
+
+MODE should be either 'rewrite' or 'generate'.  The function
+checks the value of `ancilla-show-confirmation` and returns t if
+a confirmation message should be shown, or nil otherwise."
   (pcase ancilla-show-confirmation
     ('t t)
     ('nil nil)
@@ -281,6 +282,8 @@ You can make this function synchronous by setting 'ancilla-async' to nil."
         (url-retrieve url url-callback '() t t)
       (with-current-buffer (url-retrieve-synchronously url t t)
         (funcall url-callback nil)))))
+
+;; ---- PRIVATE FUNCTIONS FOR CHAT ADAPTOR -----
 
 (defun ancilla--adaptor-chat-extract-content (json)
   "Get the assistant's message content from JSON."

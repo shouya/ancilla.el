@@ -435,11 +435,11 @@ generated text as argument."
    "user"
    (concat "User placed their cursor at <|cursor|> and asked:\n"
            instruction
-           "\n\nReply with code to insert at the cursor, "
-           "beginning with <|begin insertion|> "
-           "and stop at <|end insertion|>. "
-           "Preserve original whitespace.")
-   )
+           "\n\n"
+           "Reply with the inserted content at cursor. "
+           "Begin your reply with <|begin insertion|> and "
+           "stop at <|end insertion|>. "
+           "Preserve original whitespace. "))
 
   (ancilla--adaptor-chat-request-buffer-send
    (lambda (message)

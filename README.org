@@ -1,0 +1,37 @@
+* ancilla.el: Your AI Coding Assistant
+
+Enhance your coding experience with code generation, rewriting, and interactive discussions.
+
+** Demo
+
+<INSERT demo.gif>
+
+** Feature Highlights
+
+- Generate code at the cursor with instructions
+- Rewrite the selected region with instructions
+- Discuss selected code (not implemented yet)
+- AI understands the full context displayed on the screen
+  + AI sees the visible buffer, not just the selected region.
+  + Inspect the raw conversation in the =*ancilla-chat*= buffer
+- Review diffs before applying rewrites (can be disabled with the =ancilla-show-confirmation= customization)
+- Asynchronous requests (can be disabled with the =ancilla-async= customization)
+
+The architecture is designed to support any AI backends. Currently, only the =chat= adaptor is implemented, which utilizes OpenAI's chat completion (ChatGPT and GPT4 supported).
+
+** Installation
+
+#+begin_src emacs-lisp
+(use-package ancilla
+  :straight (:host github :repo "shouya/ancilla.el")
+  :bind ("C-x C-r" . ancilla-generate-or-rewrite)
+  :custom
+  ;; Defaults to gpt-3.5-turbo, you can opt to use gpt-4.
+  ;; (ancilla-adaptor-chat-model "gpt-4")
+  (ancilla-adaptor-chat-openai-api-key "sk-XXXXXXXXXXXXXXXX"))
+#+end_src
+
+** Acknowledgments
+
+- The "select-instruct" interaction method is inspired by https://github.com/debanjum/codex-completion.
+- The "diff before apply rewrite" interaction is inspired by https://www.cursor.so.

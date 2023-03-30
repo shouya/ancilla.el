@@ -73,12 +73,6 @@ Possible values are t (always), 'rewrite-only, 'generate-only, or nil (never)."
                  (const :tag "Never" nil))
   :group 'ancilla)
 
-(defcustom ancilla-generate-show-confirmation
-  nil
-  "Whether or not show a confirmation with diff before applying the change."
-  :type 'boolean
-  :group 'ancilla)
-
 ;; ------------- PUBLIC COMMANDS ---------------
 (defun ancilla-ask ()
   "Ask a coding-related question and get an AI-powered answer."

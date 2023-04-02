@@ -33,8 +33,49 @@ The architecture is designed to support any AI backends. Currently, only the =ch
   :custom
   ;; Defaults to gpt-3.5-turbo, you can opt to use gpt-4.
   ;; (ancilla-adaptor-chat-model "gpt-4")
+
+  ;; Set your API key
   (ancilla-adaptor-chat-openai-api-key "sk-XXXXXXXXXXXXXXXX"))
 #+end_src
+
+** Usage
+
+For most of the cases, you only need to invoke =ancilla-generate-or-rewrite=. It will call =ancilla-rewrite= when there is an active region, and call =ancilla-generate otherwise=.
+
+Inspect the =*ancilla-chat*= buffer for the full conversation sent to OpenAI.
+
+** Tips
+
+*** How to disable diff view/confirmation for rewrite?
+
+Set the =ancilla-show-confirmation= variable to =nil=:
+
+#+begin_src emacs-lisp
+(setq ancilla-show-confirmation nil)
+#+end_src
+
+*** How to control the context sent to OpenAI?
+
+Ancilla.el generally sends the visible portion of the buffer to OpenAI. You can inspect the content sent to OpenAI in the =*ancilla-chat*= buffer.
+
+To control the content sent to OpenAI, you need to manage what is displayed on the screen. Here are some helpful tips:
+
+- Use =recenter-top-bottom= (usually bound to =C-l=) to control the position of the current line on the screen.
+- Use =text-scale-adjust= (usually bound to =C-+= and =C--=) to resize the text, allowing more or less text to be displayed on the screen.
+- Use [[https://www.gnu.org/software/emacs/manual/html_node/emacs/Narrowing.html][narrowing]] to precisely control what is displayed.
+
+*** Using ChatGPT by default and GPT-4 occasionally
+
+To use ChatGPT by default and GPT-4 occasionally, you can define a function that overrides the =ancilla-adaptor-chat-model=. Here's an example:
+
+#+begin_src emacs-lisp
+(defun my/ancilla-generate-or-rewrite (arg)
+  (interactive "P")
+  (let ((ancilla-adaptor-chat-model (if arg "gpt-4" "gpt-3.5-turbo")))
+    (ancilla-generate-or-rewrite)))
+#+end_src
+
+Bind this function to a hotkey, such as =C-x C-r=. To summon GPT-4, use =C-u C-x C-r=.
 
 ** Acknowledgments
 

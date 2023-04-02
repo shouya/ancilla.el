@@ -92,31 +92,34 @@ call 'ancilla-rewrite' otherwise."
 (defun ancilla-generate ()
   "Generate code using AI-powered suggestions."
   (interactive)
-  (let* ((instruction (read-string "Instruction: "))
-         (buffer-context (ancilla--get-buffer-context)))
-    (funcall (get ancilla-adaptor 'ancilla-generate)
-             :instruction instruction
-             :buffer-context buffer-context
-             :callback
-             (apply-partially 'ancilla--diff-replace-selection
-                              'generate
-                              (plist-get buffer-context :excursion)
-                              (plist-get buffer-context :selection)))))
+  (ancilla--call-adaptor-with-instruction 'generate))
 
 (defun ancilla-rewrite ()
   "Refactor code using AI-powered suggestions."
   (interactive)
+  (ancilla--call-adaptor-with-instruction 'rewrite))
+
+(defun ancilla--call-adaptor-with-instruction (mode)
   (let* ((instruction (read-string "Instruction: "))
-         (buffer-context (ancilla--get-buffer-context)))
-    (funcall (get ancilla-adaptor 'ancilla-rewrite)
+         (buffer-context (ancilla--get-buffer-context))
+         (adaptor-request-fn-name
+          (cond
+           ((eq mode 'rewrite) 'ancilla-rewrite)
+           ((eq mode 'generate) 'ancilla-generate)))
+         (adaptor-request-fn (get ancilla-adaptor adaptor-request-fn-name)))
+    (when-let ((hooks (get ancilla-adaptor 'ancilla-hooks)))
+      (dolist (hook hooks) (funcall hook
+                                    :instruction instruction
+                                    :buffer-context buffer-context
+                                    :mode mode)))
+    (funcall adaptor-request-fn
              :instruction instruction
              :buffer-context buffer-context
              :callback
              (apply-partially 'ancilla--diff-replace-selection
-                              'rewrite
+                              mode
                               (plist-get buffer-context :excursion)
                               (plist-get buffer-context :selection)))))
-
 
 ;; ------------ PRIVATE FUNCTIONS --------------
 
@@ -373,8 +376,7 @@ replacement text as argument."
    "user"
    (concat "Here is the context that may or may not be useful:"
            "\n- filename: " (plist-get buffer-context :file-name)
-           "\n- editor mode: " (plist-get buffer-context :buffer-mode)
-           ))
+           "\n- editor mode: " (plist-get buffer-context :buffer-mode)))
 
   ;; input
   (ancilla--adaptor-chat-request-buffer-append
@@ -383,8 +385,7 @@ replacement text as argument."
            "<|begin selection|>"
            (plist-get buffer-context :selection)
            "<|end selection|>"
-           (plist-get buffer-context :after-selection)
-           ))
+           (plist-get buffer-context :after-selection)))
 
   ;; instruction
   (ancilla--adaptor-chat-request-buffer-append
@@ -394,15 +395,15 @@ replacement text as argument."
            "\n\nReply with the replacement for SELECTION. "
            "Your response must begin with <|begin replacement|> "
            "and stop at <|end replacement|>. "
-           "Do not include updated code. Preserve original whitespace.")
-   )
+           "Do not include updated code. Preserve original whitespace."))
 
   (ancilla--adaptor-chat-request-buffer-send
    (lambda (message)
      (let ((replacement (ancilla--adaptor-chat-get-text-between
                          message
                          "<|begin replacement|>" "<|end replacement|>")))
-       (funcall callback replacement)))))
+       (funcall callback replacement))))
+  )
 
 (cl-defun ancilla--adaptor-chat-generate
     (&key instruction buffer-context callback)
@@ -448,8 +449,14 @@ generated text as argument."
                        "<|begin insertion|>" "<|end insertion|>")))
        (funcall callback insertion)))))
 
+(defun ancilla--adaptor-chat-show-request-message (&rest _)
+  "Show a message indicating the request the model used."
+  (message "Requesting (%s)..." ancilla-adaptor-chat-model))
+
 (put 'chat 'ancilla-rewrite 'ancilla--adaptor-chat-rewrite)
 (put 'chat 'ancilla-generate 'ancilla--adaptor-chat-generate)
+(put 'chat 'ancilla-hooks '(ancilla--adaptor-chat-show-request-message))
+
 
 (provide 'ancilla)
 

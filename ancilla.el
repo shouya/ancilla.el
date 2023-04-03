@@ -107,6 +107,24 @@ call 'ancilla-rewrite' otherwise."
 ;; ------------ PRIVATE FUNCTIONS --------------
 
 (defun ancilla--call-adaptor-with-instruction (mode)
+  "Call the AI-powered adaptor with the given MODE and instruction.
+
+MODE should be either 'rewrite or 'generate.  The function prompts
+the user for an instruction, gets the current buffer context, and
+calls the appropriate function in the adaptor.  If the adaptor
+returns a suggestion, the function applies the suggestion to the
+buffer.
+
+If `ancilla-show-confirmation' is set to 't', the function shows a
+confirmation message before applying the suggestion.
+
+If `ancilla-show-confirmation' is set to 'rewrite-only', the
+function shows a confirmation message only when MODE is 'rewrite'.
+
+The function also calls any hooks registered with the
+`ancilla-hooks' property of the adaptor.  Each hook is called with
+a plist containing the keys :instruction, :buffer-context, and
+:mode."
   (let* ((instruction (read-string "Instruction: "))
          (buffer-context (ancilla--get-buffer-context))
          (adaptor-request-fn-name

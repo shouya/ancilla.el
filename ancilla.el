@@ -74,11 +74,13 @@ Possible values are t (always), 'rewrite-only, 'generate-only, or nil (never)."
   :group 'ancilla)
 
 ;; ------------- PUBLIC COMMANDS ---------------
+;;;###autoload
 (defun ancilla-ask ()
   "Ask a coding-related question and get an AI-powered answer."
   (interactive)
   (message "Ask a question function not yet implemented."))
 
+;;;###autoload
 (defun ancilla-generate-or-rewrite ()
   "Generate or rewrite code using AI-powered suggestions.
 
@@ -89,11 +91,13 @@ call 'ancilla-rewrite' otherwise."
       (ancilla-rewrite)
     (ancilla-generate)))
 
+;;;###autoload
 (defun ancilla-generate ()
   "Generate code using AI-powered suggestions."
   (interactive)
   (ancilla--call-adaptor-with-instruction 'generate))
 
+;;;###autoload
 (defun ancilla-rewrite ()
   "Refactor code using AI-powered suggestions."
   (interactive)

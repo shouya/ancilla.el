@@ -331,6 +331,7 @@ ROLE and TEXT."
 (defun ancilla--adaptor-chat-request-buffer-reset ()
   "Reset the conversation in *ancilla-chat* buffer."
   (with-current-buffer (get-buffer-create "*ancilla-chat*")
+    (ancilla-chat-mode)
     (delete-region (point-min) (point-max))))
 
 (defun ancilla--adaptor-chat-request-buffer-send (callback)
@@ -462,6 +463,30 @@ generated text as argument."
 (put 'chat 'ancilla-generate 'ancilla--adaptor-chat-generate)
 (put 'chat 'ancilla-hooks '(ancilla--adaptor-chat-show-request-message))
 
+(defvar ancilla-chat-mode-keywords
+  `((,(rx bol (or "USER" "SYSTEM" "ASSISTANT") ">") . font-lock-keyword-face)
+    (,(rx (seq "<|begin " (group (+ word)) "|>")
+          (group (*? anychar))
+          (seq "<|end " (backref 1) "|>"))
+     . (2 font-lock-string-face t))
+    (,(rx (or (seq "<|begin " (+ word) "|>")
+              (seq "<|end " (+ word) "|>")
+              (seq "<|cursor|>")))
+     . font-lock-variable-name-face)))
+
+(defvar ancilla-chat-mode-hook nil)
+(define-derived-mode ancilla-chat-mode fundamental-mode "A/Chat"
+  "Major mode for ancilla chat log."
+  ;; enable custom font-lock
+  (setq font-lock-defaults '(ancilla-chat-mode-keywords))
+  (setq font-lock-multiline t)
+
+  ;; render page break as a horizontal ruler
+  (setq buffer-display-table (make-display-table))
+  (aset buffer-display-table ?\f
+        (make-vector 10 (make-glyph-code ?- 'page-break-lines)))
+
+  (run-hooks 'ancilla-chat-mode-hook))
 
 (provide 'ancilla)
 

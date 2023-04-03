@@ -1,8 +1,9 @@
-;;; ancilla.el --- Emacs AI assistance for code generation, editing & refactoring. -*- lexical-binding: t; -*-
+;;; ancilla.el --- Your AI coding assistant -*- lexical-binding: t; -*-
 
 ;; Author: Shou Ya <shouya@users.noreply.github.com>
 ;; Version: 1.0
-;; Package-Requires: ((emacs "27") cl-lib)
+;; Package-Requires: ((emacs "27"))
+;; Homepage: https://github.com/shouya/ancilla.el
 
 ;;; Commentary:
 
@@ -125,10 +126,7 @@ call 'ancilla-rewrite' otherwise."
              (apply-partially 'ancilla--diff-replace-selection
                               mode
                               (plist-get buffer-context :excursion)
-                              (plist-get buffer-context :selection)))
-
-
-    ))
+                              (plist-get buffer-context :selection)))))
 
 (defun ancilla--show-confirmation-p (mode)
   "Determine whether to show confirmation based on the current mode.
@@ -276,8 +274,7 @@ Return a relative path when a project is detected."
                                (min (point-max) (window-end)))
 
      ;; used to replace result accurately
-     :excursion `(,(current-buffer) ,(point-marker) ,(mark-marker))
-     )))
+     :excursion `(,(current-buffer) ,(point-marker) ,(mark-marker)))))
 
 (cl-defun ancilla--request-and-extract-json (&key url callback)
   "Request the URL and execute CALLBACK.
@@ -329,8 +326,7 @@ Returns a list of (ROLE . TEXT) pairs, where ROLE is one of
                  ((string-prefix-p "SYSTEM> " message)
                   `("system" . ,(string-remove-prefix "SYSTEM> " message)))
                  ((string-prefix-p "ASSISTANT> " message)
-                  `("assistant" . ,(string-remove-prefix "ASSISTANT> " message)))
-                 ))
+                  `("assistant" . ,(string-remove-prefix "ASSISTANT> " message)))))
               messages))))
 
 (defun ancilla--adaptor-chat-request-buffer-append (role text)
@@ -424,8 +420,7 @@ replacement text as argument."
      (let ((replacement (ancilla--adaptor-chat-get-text-between
                          message
                          "<|begin replacement|>" "<|end replacement|>")))
-       (funcall callback replacement))))
-  )
+       (funcall callback replacement)))))
 
 (cl-defun ancilla--adaptor-chat-generate
     (&key instruction buffer-context callback)
@@ -442,16 +437,14 @@ generated text as argument."
    "user"
    (concat "Here is the context that may or may not be useful:"
            "\n- filename: " (plist-get buffer-context :file-name)
-           "\n- editor mode: " (plist-get buffer-context :buffer-mode)
-           ))
+           "\n- editor mode: " (plist-get buffer-context :buffer-mode)))
 
   ;; input
   (ancilla--adaptor-chat-request-buffer-append
    "user"
    (concat (plist-get buffer-context :before-selection)
            "<|cursor|>"
-           (plist-get buffer-context :after-selection)
-           ))
+           (plist-get buffer-context :after-selection)))
 
   ;; instruction
   (ancilla--adaptor-chat-request-buffer-append

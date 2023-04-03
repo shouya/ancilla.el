@@ -300,7 +300,7 @@ You can make this function synchronous by setting 'ancilla-async' to nil."
     (if (and start-pos end-pos)
         (substring content start-pos end-pos)
       (switch-to-buffer "*ancilla-chat*")
-      (error "Failed to parse OpenAI response"))))
+      (error "Failed to parse OpenAI response, showing chat log buffer"))))
 
 (defun ancilla--adaptor-chat-request-buffer-parse ()
   "Parse the *ancilla-chat* buffer into a conversation.

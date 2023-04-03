@@ -187,8 +187,20 @@ One must pass the EXCURSION before the change is made.  See
       (ancilla--replace-selection excursion new-text)
     ;; show diff and confirmation
     (ancilla--show-diff-changes old-text new-text)
-    (when (y-or-n-p "Accept the change? ")
-      (ancilla--replace-selection excursion new-text))
+
+    ;; scroll the diff window without leaving y-or-n-p prompt.
+    (let ((query-replace-map (copy-keymap query-replace-map)))
+      (define-key query-replace-map [remap next-line]
+        (lambda nil (interactive)
+          (with-selected-window (get-buffer-window "*ancilla-diff*")
+            (scroll-up 1))))
+      (define-key query-replace-map [remap previous-line]
+        (lambda nil (interactive)
+          (with-selected-window (get-buffer-window "*ancilla-diff*")
+            (scroll-down 1))))
+
+      (when (y-or-n-p "Accept the change? ")
+        (ancilla--replace-selection excursion new-text)))
     (ancilla--hide-diff-changes)))
 
 (defun ancilla--show-diff-changes (old new)
@@ -478,7 +490,9 @@ generated text as argument."
               (seq "<|cursor|>")))
      . font-lock-variable-name-face)))
 
-(defvar ancilla-chat-mode-hook nil)
+;; (defvar ancilla-chat-mode-hook nil)
+;; (defvar ancilla-chat-mode-map (make-sparse-keymap))
+
 (define-derived-mode ancilla-chat-mode fundamental-mode "A/Chat"
   "Major mode for ancilla chat log."
   ;; enable custom font-lock
@@ -488,9 +502,7 @@ generated text as argument."
   ;; render page break as a horizontal ruler
   (setq buffer-display-table (make-display-table))
   (aset buffer-display-table ?\f
-        (make-vector 10 (make-glyph-code ?- 'page-break-lines)))
-
-  (run-hooks 'ancilla-chat-mode-hook))
+        (make-vector 10 (make-glyph-code ?- 'page-break-lines))))
 
 (provide 'ancilla)
 

@@ -99,6 +99,8 @@ call 'ancilla-rewrite' otherwise."
   (interactive)
   (ancilla--call-adaptor-with-instruction 'rewrite))
 
+;; ------------ PRIVATE FUNCTIONS --------------
+
 (defun ancilla--call-adaptor-with-instruction (mode)
   (let* ((instruction (read-string "Instruction: "))
          (buffer-context (ancilla--get-buffer-context))
@@ -119,9 +121,10 @@ call 'ancilla-rewrite' otherwise."
              (apply-partially 'ancilla--diff-replace-selection
                               mode
                               (plist-get buffer-context :excursion)
-                              (plist-get buffer-context :selection)))))
+                              (plist-get buffer-context :selection)))
 
-;; ------------ PRIVATE FUNCTIONS --------------
+
+    ))
 
 (defun ancilla--show-confirmation-p (mode)
   "Determine whether to show confirmation based on the current mode.
@@ -290,8 +293,10 @@ You can make this function synchronous by setting 'ancilla-async' to nil."
   "Get the part of CONTENT between START and END."
   (let* ((start-pos (and (string-match start content) (match-end 0)))
          (end-pos (string-match end content start-pos)))
-    (when (and start-pos end-pos)
-      (substring content start-pos end-pos))))
+    (if (and start-pos end-pos)
+        (substring content start-pos end-pos)
+      (switch-to-buffer "*ancilla-chat*")
+      (error "Failed to parse OpenAI response"))))
 
 (defun ancilla--adaptor-chat-request-buffer-parse ()
   "Parse the *ancilla-chat* buffer into a conversation.

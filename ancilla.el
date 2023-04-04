@@ -199,7 +199,8 @@ in the buffer saved in EXCURSION."
       (lambda nil (interactive)
         (with-selected-window (get-buffer-window "*ancilla-diff*")
           (scroll-down 1))))
-    map))
+    map)
+  "keymap to use for getting user confirmation")
 
 (defun ancilla--diff-replace-selection (mode excursion old-text new-text)
   "Replace the current selection with NEW-TEXT.

@@ -188,6 +188,19 @@ in the buffer saved in EXCURSION."
      (delete-region (region-beginning) (region-end)))
    (insert new-text)))
 
+(defvar ancilla-confirmation-map
+  (let* ((map (make-sparse-keymap)))
+    (set-keymap-parent map query-replace-map)
+    (define-key map [remap nextline]
+      (lambda nil (interactive)
+        (with-selected-window (get-buffer-window "*ancilla-diff*")
+          (scroll-up 1))))
+    (define-key map [remap previous-line]
+      (lambda nil (interactive)
+        (with-selected-window (get-buffer-window "*ancilla-diff*")
+          (scroll-down 1))))
+    map))
+
 (defun ancilla--diff-replace-selection (mode excursion old-text new-text)
   "Replace the current selection with NEW-TEXT.
 
@@ -205,16 +218,7 @@ One must pass the EXCURSION before the change is made.  See
     (ancilla--show-diff-changes old-text new-text)
 
     ;; scroll the diff window without leaving y-or-n-p prompt.
-    (let ((query-replace-map (copy-keymap query-replace-map)))
-      (define-key query-replace-map [remap next-line]
-        (lambda nil (interactive)
-          (with-selected-window (get-buffer-window "*ancilla-diff*")
-            (scroll-up 1))))
-      (define-key query-replace-map [remap previous-line]
-        (lambda nil (interactive)
-          (with-selected-window (get-buffer-window "*ancilla-diff*")
-            (scroll-down 1))))
-
+    (let ((query-replace-map ancilla-confirmation-map))
       (when (y-or-n-p "Accept the change? ")
         (ancilla--replace-selection excursion new-text)))
     (ancilla--hide-diff-changes)))

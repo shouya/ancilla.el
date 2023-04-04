@@ -487,27 +487,50 @@ generated text as argument."
                        "<|begin insertion|>" "<|end insertion|>")))
        (funcall callback insertion)))))
 
+(defface ancilla-chat-message-separator
+  '((t :foreground "darkred" :bold t))
+  "The face in *ancilla-chat* buffer for the separators between messages."
+  :group 'ancilla)
+
+(defface ancilla-chat-message-role
+  '((t :inherit font-lock-keyword-face))
+  "The face used in *ancilla-chat* buffer for the roles, e.g. \"USER>\"."
+  :group 'ancilla)
+
+(defface ancilla-chat-message-delimiter
+  '((t :inherit font-lock-variable-name-face))
+  "The face in *ancilla-chat* buffer for the delimiters, e.g. \"<|begin replacement|>\"."
+  :group 'ancilla)
+
+(defface ancilla-chat-message-quoted
+  '((t :inherit highlight))
+  "The face in *ancilla-chat* buffer for quoted texts."
+  :group 'ancilla)
+
+(defvar ancilla-chat-message-separator-face 'ancilla-chat-message-separator
+  "The face in *ancilla-chat* buffer for chat message separators.")
+(defvar ancilla-chat-message-role-face 'ancilla-chat-message-role
+  "The face used in *ancilla-chat* buffer for the roles, e.g. \"USER>\".")
+(defvar ancilla-chat-message-delimiter-face 'ancilla-chat-message-delimiter
+  "The face in *ancilla-chat* buffer for the delimiters, e.g. \"<|begin replacement|>\".")
+(defvar ancilla-chat-message-quoted-face 'ancilla-chat-message-quoted
+  "The face in *ancilla-chat* buffer for quoted texts.")
+
 (defun ancilla--adaptor-chat-show-request-message (&rest _)
   "Show a message indicating the request the model used."
   (message "Requesting (%s)..." ancilla-adaptor-chat-model))
 
-(put 'chat 'ancilla-rewrite 'ancilla--adaptor-chat-rewrite)
-(put 'chat 'ancilla-generate 'ancilla--adaptor-chat-generate)
-(put 'chat 'ancilla-hooks '(ancilla--adaptor-chat-show-request-message))
-
 (defvar ancilla-chat-mode-keywords
-  `((,(rx bol (or "USER" "SYSTEM" "ASSISTANT") ">") . font-lock-keyword-face)
+  `((,(rx bol (or "USER" "SYSTEM" "ASSISTANT") ">")
+     . ancilla-chat-message-role-face)
     (,(rx (seq "<|begin " (group (+ word)) "|>")
           (group (*? anychar))
           (seq "<|end " (backref 1) "|>"))
-     . (2 font-lock-string-face t))
+     . (2 ancilla-chat-message-quoted-face t))
     (,(rx (or (seq "<|begin " (+ word) "|>")
               (seq "<|end " (+ word) "|>")
               (seq "<|cursor|>")))
-     . font-lock-variable-name-face)))
-
-;; (defvar ancilla-chat-mode-hook nil)
-;; (defvar ancilla-chat-mode-map (make-sparse-keymap))
+     . ancilla-chat-message-delimiter-face)))
 
 (define-derived-mode ancilla-chat-mode fundamental-mode "A/Chat"
   "Major mode for ancilla chat log."
@@ -518,7 +541,11 @@ generated text as argument."
   ;; render page break as a horizontal ruler
   (setq buffer-display-table (make-display-table))
   (aset buffer-display-table ?\f
-        (make-vector 10 (make-glyph-code ?- 'page-break-lines))))
+        (make-vector 10 (make-glyph-code ?- 'ancilla-chat-message-separator))))
+
+(put 'chat 'ancilla-rewrite 'ancilla--adaptor-chat-rewrite)
+(put 'chat 'ancilla-generate 'ancilla--adaptor-chat-generate)
+(put 'chat 'ancilla-hooks '(ancilla--adaptor-chat-show-request-message))
 
 (provide 'ancilla)
 

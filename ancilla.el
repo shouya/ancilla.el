@@ -369,6 +369,14 @@ ROLE and TEXT."
     (ancilla-chat-mode)
     (delete-region (point-min) (point-max))))
 
+(defun ancilla--adaptor-chat-openai-api-key ()
+  "Get the OpenAI API key or print a nice error."
+  (or (and (boundp 'ancilla-adaptor-chat-openai-api-key)
+           (string-prefix-p "sk-" ancilla-adaptor-chat-openai-api-key)
+           ancilla-adaptor-chat-openai-api-key)
+      (user-error "Variable %s undefined or invalid"
+                  'ancilla-adaptor-chat-openai-api-key)))
+
 (defun ancilla--adaptor-chat-request-buffer-send (callback)
   "Send the conversation in *ancilla-chat* to 'ancilla-adaptor-chat-api-endpoint'.
 
@@ -378,7 +386,7 @@ argument."
          (url-request-extra-headers
           `(("Content-Type" . "application/json")
             ("Authorization" .
-             ,(concat "Bearer " ancilla-adaptor-chat-openai-api-key))))
+             ,(concat "Bearer " (ancilla--adaptor-chat-openai-api-key)))))
          (messages (mapcar (lambda (x) `(("role" . ,(car x))
                                          ("content" . ,(cdr x))))
                            (ancilla--adaptor-chat-request-buffer-parse)))

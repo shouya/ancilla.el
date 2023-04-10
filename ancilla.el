@@ -422,21 +422,23 @@ replacement text as argument."
   ;; input
   (ancilla--adaptor-chat-request-buffer-append
    "user"
-   (concat (plist-get buffer-context :before-selection)
+   (concat "Visible portion on user's screen:\n\n"
+           (plist-get buffer-context :before-selection)
            "<|begin selection|>"
            (plist-get buffer-context :selection)
            "<|end selection|>"
-           (plist-get buffer-context :after-selection)))
+           (plist-get buffer-context :after-selection)
+           ))
 
   ;; instruction
   (ancilla--adaptor-chat-request-buffer-append
    "user"
    (concat "User selected the region marked by <|begin selection|>/<|end selection|> and asked:\n"
            instruction
-           "\n\nReply with the replacement for SELECTION. "
+           "\n\nReply with your replacement for the selection. "
            "Your response must begin with <|begin replacement|> "
            "and stop at <|end replacement|>. "
-           "Do not include updated code. Preserve original whitespace."))
+           "Do not include updated code. Preserve original indentation."))
 
   (ancilla--adaptor-chat-request-buffer-send
    (lambda (message)
@@ -465,7 +467,8 @@ generated text as argument."
   ;; input
   (ancilla--adaptor-chat-request-buffer-append
    "user"
-   (concat (plist-get buffer-context :before-selection)
+   (concat "Visible portion on user's screen:\n\n"
+           (plist-get buffer-context :before-selection)
            "<|cursor|>"
            (plist-get buffer-context :after-selection)))
 
@@ -475,10 +478,10 @@ generated text as argument."
    (concat "User placed their cursor at <|cursor|> and asked:\n"
            instruction
            "\n\n"
-           "Reply with the inserted content at cursor. "
+           "Reply with the desired insertion at cursor. "
            "Begin your reply with <|begin insertion|> and "
            "stop at <|end insertion|>. "
-           "Preserve original whitespace. "))
+           "Preserve original indentation."))
 
   (ancilla--adaptor-chat-request-buffer-send
    (lambda (message)

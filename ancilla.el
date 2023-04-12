@@ -79,7 +79,7 @@ Possible values are t (always), 'rewrite-only, 'generate-only, or nil (never)."
 (defun ancilla-ask ()
   "Ask a coding-related question and get an AI-powered answer."
   (interactive)
-  (message "Ask a question function not yet implemented."))
+  (ancilla--call-adaptor-with-instruction 'ask))
 
 ;;;###autoload
 (defun ancilla-generate-or-rewrite ()
@@ -125,13 +125,28 @@ The function also calls any hooks registered with the
 `ancilla-hooks' property of the adaptor.  Each hook is called with
 a plist containing the keys :instruction, :buffer-context, and
 :mode."
-  (let* ((instruction (read-string "Instruction: "))
+  (let* ((instruction
+          (if (eq mode 'ask)
+              (read-string "Question: ")
+            (read-string "Instruction: ")))
          (buffer-context (ancilla--get-buffer-context))
          (adaptor-request-fn-name
           (cond
            ((eq mode 'rewrite) 'ancilla-rewrite)
-           ((eq mode 'generate) 'ancilla-generate)))
-         (adaptor-request-fn (get ancilla-adaptor adaptor-request-fn-name)))
+           ((eq mode 'generate) 'ancilla-generate)
+           ((eq mode 'ask) 'ancilla-ask)))
+         (adaptor-request-fn (get ancilla-adaptor adaptor-request-fn-name))
+         (request-callback-fn
+          (cond
+           ((memq mode '(rewrite generate))
+            (apply-partially 'ancilla--diff-replace-selection
+                             mode
+                             (plist-get buffer-context :excursion)
+                             (plist-get buffer-context :selection)))
+           (t 'ignore)
+           ;; (t (lambda (&rest _)
+           ;;      (switch-to-buffer "*ancilla-chat*")))
+           )))
     (when-let ((hooks (get ancilla-adaptor 'ancilla-hooks)))
       (dolist (hook hooks) (funcall hook
                                     :instruction instruction
@@ -140,11 +155,7 @@ a plist containing the keys :instruction, :buffer-context, and
     (funcall adaptor-request-fn
              :instruction instruction
              :buffer-context buffer-context
-             :callback
-             (apply-partially 'ancilla--diff-replace-selection
-                              mode
-                              (plist-get buffer-context :excursion)
-                              (plist-get buffer-context :selection)))))
+             :callback request-callback-fn)))
 
 (defun ancilla--show-confirmation-p (mode)
   "Determine whether to show confirmation based on the current mode.
@@ -455,6 +466,41 @@ replacement text as argument."
                          "<|begin replacement|>" "<|end replacement|>")))
        (funcall callback replacement)))))
 
+(cl-defun ancilla--adaptor-chat-ask (&key instruction buffer-context callback)
+  "Ask question about selected code using the chat adaptor.
+
+INSTRUCTION: The instruction to follow when rewriting the code.
+BUFFER-CONTEXT: The context about what needs to be rewritten.
+CALLBACK: The function to call when AI returns.  It accepts the
+replacement text as argument."
+  (ancilla--adaptor-chat-request-buffer-reset)
+
+  ;; context prompt
+  (ancilla--adaptor-chat-request-buffer-append
+   "user"
+   (concat "Here is the context that may or may not be useful:"
+           "\n- filename: " (plist-get buffer-context :file-name)
+           "\n- editor mode: " (plist-get buffer-context :buffer-mode)))
+
+  ;; input
+  (ancilla--adaptor-chat-request-buffer-append
+   "user"
+   (concat "Visible portion on user's screen:\n\n"
+           (plist-get buffer-context :before-selection)
+           "<|begin selection|>"
+           (plist-get buffer-context :selection)
+           "<|end selection|>"
+           (plist-get buffer-context :after-selection)
+           ))
+
+  ;; instruction
+  (ancilla--adaptor-chat-request-buffer-append
+   "user"
+   (concat "User selected the region marked by <|begin selection|>/<|end selection|> and asked:\n"
+           instruction))
+
+  (ancilla--adaptor-chat-request-buffer-send 'message))
+
 (cl-defun ancilla--adaptor-chat-generate
     (&key instruction buffer-context callback)
   "Generate code using the chat adaptor.
@@ -556,6 +602,8 @@ generated text as argument."
 
 (put 'chat 'ancilla-rewrite 'ancilla--adaptor-chat-rewrite)
 (put 'chat 'ancilla-generate 'ancilla--adaptor-chat-generate)
+(put 'chat 'ancilla-ask 'ancilla--adaptor-chat-ask)
+
 (put 'chat 'ancilla-hooks '(ancilla--adaptor-chat-show-request-message))
 
 (provide 'ancilla)

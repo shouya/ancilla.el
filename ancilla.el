@@ -74,6 +74,12 @@ Possible values are t (always), 'rewrite-only, 'generate-only, or nil (never)."
                  (const :tag "Never" nil))
   :group 'ancilla)
 
+(defcustom ancilla-chat
+  "*ancilla-chat*"
+  "Buffer name for ancilla chat interactions."
+  :type 'string
+  :group 'ancilla)
+
 ;; ------------- PUBLIC COMMANDS ---------------
 ;;;###autoload
 (defun ancilla-ask ()
@@ -106,56 +112,69 @@ call 'ancilla-rewrite' otherwise."
 
 ;; ------------ PRIVATE FUNCTIONS --------------
 
-(defun ancilla--call-adaptor-with-instruction (mode)
-  "Call the AI-powered adaptor with the given MODE and instruction.
 
-MODE should be either 'rewrite or 'generate.  The function prompts
-the user for an instruction, gets the current buffer context, and
-calls the appropriate function in the adaptor.  If the adaptor
-returns a suggestion, the function applies the suggestion to the
-buffer.
-
-If `ancilla-show-confirmation' is set to 't', the function shows a
-confirmation message before applying the suggestion.
-
-If `ancilla-show-confirmation' is set to 'rewrite-only', the
-function shows a confirmation message only when MODE is 'rewrite'.
-
-The function also calls any hooks registered with the
-`ancilla-hooks' property of the adaptor.  Each hook is called with
-a plist containing the keys :instruction, :buffer-context, and
-:mode."
-  (let* ((instruction
-          (if (eq mode 'ask)
-              (read-string "Question: ")
-            (read-string "Instruction: ")))
-         (buffer-context (ancilla--get-buffer-context))
-         (adaptor-request-fn-name
-          (cond
-           ((eq mode 'rewrite) 'ancilla-rewrite)
-           ((eq mode 'generate) 'ancilla-generate)
-           ((eq mode 'ask) 'ancilla-ask)))
+(defun ancilla--process-instruction (instruction mode)
+  "Process the given INSTRUCTION with the specified MODE."
+  (let* ((buffer-context (ancilla--get-buffer-context))
+         (adaptor-request-fn-name (ancilla--get-adaptor-function mode))
          (adaptor-request-fn (get ancilla-adaptor adaptor-request-fn-name))
-         (request-callback-fn
-          (cond
-           ((memq mode '(rewrite generate))
-            (apply-partially 'ancilla--diff-replace-selection
-                             mode
-                             (plist-get buffer-context :excursion)
-                             (plist-get buffer-context :selection)))
-           (t 'ignore)
-           ;; (t (lambda (&rest _)
-           ;;      (switch-to-buffer "*ancilla-chat*")))
-           )))
+         (request-callback-fn (ancilla--create-callback-function mode buffer-context)))
     (when-let ((hooks (get ancilla-adaptor 'ancilla-hooks)))
-      (dolist (hook hooks) (funcall hook
-                                    :instruction instruction
-                                    :buffer-context buffer-context
-                                    :mode mode)))
+      (ancilla--run-hooks hooks instruction buffer-context mode))
     (funcall adaptor-request-fn
              :instruction instruction
              :buffer-context buffer-context
              :callback request-callback-fn)))
+
+(defun ancilla--process-ask (instruction)
+  "Process the given INSTRUCTION for 'ask' mode."
+  (ancilla--process-instruction instruction 'ask))
+
+(defun ancilla--process-generate (instruction)
+  "Process the given INSTRUCTION for 'generate' mode."
+  (ancilla--process-instruction instruction 'generate))
+
+(defun ancilla--process-rewrite (instruction)
+  "Process the given INSTRUCTION for 'rewrite' mode."
+  (ancilla--process-instruction instruction 'rewrite))
+
+(defun ancilla--call-adaptor-with-instruction (mode)
+  "Call the AI-powered adaptor with the given MODE and instruction."
+  (let ((instruction (ancilla--prompt-for-instruction mode)))
+    (ancilla--process-instruction instruction mode)))
+
+(defun ancilla--prompt-for-instruction (mode)
+  "Prompt the user for an instruction based on MODE."
+  (if (eq mode 'ask)
+      (read-string "Question: ")
+    (read-string "Instruction: ")))
+
+(defun ancilla--get-adaptor-function (mode)
+  "Return the adaptor function name based on MODE."
+  (cond
+   ((eq mode 'rewrite) 'ancilla-rewrite)
+   ((eq mode 'generate) 'ancilla-generate)
+   ((eq mode 'ask) 'ancilla-ask)))
+
+(defun ancilla--create-callback-function (mode buffer-context)
+  "Create a callback function for the request based on MODE and BUFFER-CONTEXT."
+  (cond
+   ((memq mode '(rewrite generate))
+    (apply-partially 'ancilla--diff-replace-selection
+                     mode
+                     (plist-get buffer-context :excursion)
+                     (plist-get buffer-context :selection)))
+   (t 'ignore)))
+
+(defun ancilla--run-hooks (hooks instruction buffer-context mode)
+  "Run the hooks registered with `ancilla-hooks`."
+  (dolist (hook hooks)
+    (funcall hook
+             :instruction instruction
+             :buffer-context buffer-context
+             :mode mode)))
+
+;;;; refactored code above
 
 (defun ancilla--show-confirmation-p (mode)
   "Determine whether to show confirmation based on the current mode.
@@ -274,11 +293,11 @@ Return a relative path when a project is detected."
             (root (cond
                    ((and (fboundp 'projectile-project-root)
                          (projectile-project-root)))
-                   ((and (fboundp 'ffip-project-root)
-                         (ffip-project-root)))
-                   ((and (fboundp 'project-current)
-                         (fboundp 'project-root)
-                         (project-root (project-current))))
+                   ;; ((and (fboundp 'ffip-project-root)
+                   ;;       (ffip-project-root)))
+                   ;; ((and (fboundp 'project-current)
+                   ;;       (fboundp 'project-root)
+                   ;;       (project-root (project-current))))
                    (t 'no-project)))
             (local-file-name
              (if (not (eq root 'no-project))
@@ -342,7 +361,7 @@ You can make this function synchronous by setting 'ancilla-async' to nil."
          (end-pos (string-match end content start-pos)))
     (if (and start-pos end-pos)
         (substring content start-pos end-pos)
-      (switch-to-buffer "*ancilla-chat*")
+      (switch-to-buffer ancilla-chat)
       (error "Failed to parse OpenAI response, showing chat log buffer"))))
 
 (defun ancilla--adaptor-chat-request-buffer-parse ()
@@ -350,7 +369,7 @@ You can make this function synchronous by setting 'ancilla-async' to nil."
 
 Returns a list of (ROLE . TEXT) pairs, where ROLE is one of
 \"user\", \"system\", or \"assistant\". TEXT is a string."
-  (with-current-buffer (get-buffer-create "*ancilla-chat*")
+  (with-current-buffer (get-buffer-create ancilla-chat)
     (let* ((content (buffer-substring-no-properties (point-min) (point-max)))
            (messages (split-string content "\n\f\n" t)))
       (mapcar (lambda (message)
@@ -368,7 +387,7 @@ Returns a list of (ROLE . TEXT) pairs, where ROLE is one of
 
 See 'ancilla--adaptor-chat-request-buffer-parse' for the use of
 ROLE and TEXT."
-  (with-current-buffer (get-buffer-create "*ancilla-chat*")
+  (with-current-buffer (get-buffer-create ancilla-chat)
     (save-excursion
       (goto-char (point-max))
       (insert (format "%s> " (upcase role)))
@@ -376,7 +395,7 @@ ROLE and TEXT."
 
 (defun ancilla--adaptor-chat-request-buffer-reset ()
   "Reset the conversation in *ancilla-chat* buffer."
-  (with-current-buffer (get-buffer-create "*ancilla-chat*")
+  (with-current-buffer (get-buffer-create ancilla-chat)
     (ancilla-chat-mode)
     (delete-region (point-min) (point-max))))
 
@@ -406,7 +425,6 @@ argument."
            `(:model ,ancilla-adaptor-chat-model
                     :messages ,messages
                     :temperature 0.1))))
-
     (ancilla--request-and-extract-json
      :url ancilla-adaptor-chat-api-endpoint
      :callback
@@ -499,7 +517,12 @@ replacement text as argument."
    (concat "User selected the region marked by <|begin selection|>/<|end selection|> and asked:\n"
            instruction))
 
-  (ancilla--adaptor-chat-request-buffer-send 'message))
+  (ancilla--adaptor-chat-request-buffer-send (lambda (message)
+                                               ())) ;; discard the message, we can print to some buffer in future if we want
+
+  ;; show result
+  (switch-to-buffer-other-window ancilla-chat)
+  )
 
 (cl-defun ancilla--adaptor-chat-generate
     (&key instruction buffer-context callback)

@@ -68,7 +68,7 @@
 (defcustom ancilla-show-confirmation 'rewrite-only
   "Specify when to show confirmation.
 
-Possible values are t (always), 'rewrite-only, 'generate-only, or nil (never)."
+Possible values are t (always), `rewrite-only', `generate-only', or nil (never)."
   :type '(choice (const :tag "Always" t)
                  (const :tag "Only for rewrite" rewrite-only)
                  (const :tag "Only for generate" generate-only)
@@ -92,8 +92,8 @@ Possible values are t (always), 'rewrite-only, 'generate-only, or nil (never)."
 (defun ancilla-generate-or-rewrite ()
   "Generate or rewrite code using AI-powered suggestions.
 
-Calls 'ancilla-generate' of there is no active selection, and
-call 'ancilla-rewrite' otherwise."
+Calls `ancilla-generate' of there is no active selection, and
+call `ancilla-rewrite' otherwise."
   (interactive)
   (if (region-active-p)
       (ancilla-rewrite)
@@ -128,15 +128,15 @@ call 'ancilla-rewrite' otherwise."
              :callback request-callback-fn)))
 
 (defun ancilla--process-ask (instruction)
-  "Process the given INSTRUCTION for 'ask' mode."
+  "Process the given INSTRUCTION for `ask' mode."
   (ancilla--process-instruction instruction 'ask))
 
 (defun ancilla--process-generate (instruction)
-  "Process the given INSTRUCTION for 'generate' mode."
+  "Process the given INSTRUCTION for `generate' mode."
   (ancilla--process-instruction instruction 'generate))
 
 (defun ancilla--process-rewrite (instruction)
-  "Process the given INSTRUCTION for 'rewrite' mode."
+  "Process the given INSTRUCTION for `rewrite' mode."
   (ancilla--process-instruction instruction 'rewrite))
 
 (defun ancilla--call-adaptor-with-instruction (mode)
@@ -180,7 +180,7 @@ call 'ancilla-rewrite' otherwise."
 (defun ancilla--show-confirmation-p (mode)
   "Determine whether to show confirmation based on the current mode.
 
-MODE should be either 'rewrite' or 'generate'.  The function
+MODE should be either `rewrite' or `generate'.  The function
 checks the value of `ancilla-show-confirmation` and returns t if
 a confirmation message should be shown, or nil otherwise."
   (pcase ancilla-show-confirmation
@@ -236,13 +236,13 @@ in the buffer saved in EXCURSION."
 (defun ancilla--diff-replace-selection (mode excursion old-text new-text)
   "Replace the current selection with NEW-TEXT.
 
-Based on the MODE and the 'ancilla-show-confirmation' config,
+Based on the MODE and the `ancilla-show-confirmation' config,
 show a diff of the changes between OLD-TEXT and NEW-TEXT.  If the
 user accepts the change, the selection is replaced with NEW-TEXT.
 Otherwise, the selection is left unchanged.
 
 One must pass the EXCURSION before the change is made.  See
-'ancilla--with-excursion'."
+`ancilla--with-excursion'."
   (if (not (ancilla--show-confirmation-p mode))
       ;; accept without asking
       (ancilla--replace-selection excursion new-text)
@@ -340,7 +340,7 @@ URL: The URL to retrieve.
 EXTRACT: A function that takes the JSON response and extracts the
 desired information.
 
-You can make this function synchronous by setting 'ancilla-async' to nil."
+You can make this function synchronous by setting `ancilla-async' to nil."
   (let ((url-callback (lambda (_status)
                         (let ((json-object-type 'alist)
                               (json-key-type 'symbol)
@@ -388,7 +388,7 @@ Returns a list of (ROLE . TEXT) pairs, where ROLE is one of
 (defun ancilla--adaptor-chat-request-buffer-append (role text)
   "Append a message to *ancilla-chat* buffer.
 
-See 'ancilla--adaptor-chat-request-buffer-parse' for the use of
+See `ancilla--adaptor-chat-request-buffer-parse' for the use of
 ROLE and TEXT."
   (with-current-buffer (get-buffer-create ancilla-chat)
     (save-excursion
@@ -411,7 +411,7 @@ ROLE and TEXT."
                   'ancilla-adaptor-chat-openai-api-key)))
 
 (defun ancilla--adaptor-chat-request-buffer-send (callback)
-  "Send the conversation in *ancilla-chat* to 'ancilla-adaptor-chat-api-endpoint'.
+  "Send the conversation in *ancilla-chat* to `ancilla-adaptor-chat-api-endpoint'.
 
 CALLBACK should take the assistant's reply (string) as the only
 argument."

@@ -165,6 +165,14 @@ call `ancilla-rewrite' otherwise."
                      mode
                      (plist-get buffer-context :excursion)
                      (plist-get buffer-context :selection)))
+
+   ((eq mode '(ask))
+    ;; ignore the message and switch to ancilla-chat. we should do
+    ;; more than this in the future.
+    (lambda (message)
+      (ignore message)
+      (switch-to-buffer-other-window ancilla-chat)))
+
    (t 'ignore)))
 
 (defun ancilla--run-hooks (hooks instruction buffer-context mode)
@@ -519,11 +527,8 @@ replacement text as argument."
    (concat "User selected the region marked by <selection> tag and asked:\n"
            instruction))
 
-  (ancilla--adaptor-chat-request-buffer-send (lambda (message)
-                                               ())) ;; discard the message, we can print to some buffer in future if we want
-
-  ;; show result
-  (switch-to-buffer-other-window ancilla-chat)
+  ;; invoke callback
+  (ancilla--adaptor-chat-request-buffer-send callback)
   )
 
 (cl-defun ancilla--adaptor-chat-generate

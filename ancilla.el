@@ -2,7 +2,7 @@
 
 ;; Author: Shou Ya <shouya@users.noreply.github.com>
 ;; Version: 1.0
-;; Package-Requires: ((emacs "27"))
+;; Package-Requires: ((emacs "27") f)
 ;; Homepage: https://github.com/shouya/ancilla.el
 
 ;;; Commentary:
@@ -25,6 +25,7 @@
 (require 'diff)
 (require 'files)
 (require 'let-alist)
+(require 'f)
 
 (defvar url-http-end-of-headers)
 
@@ -291,13 +292,15 @@ buffers and displays the result in a buffer named
 Return a relative path when a project is detected."
   (if-let* ((file-name (buffer-file-name))
             (root (cond
-                   ((and (fboundp 'projectile-project-root)
-                         (projectile-project-root)))
-                   ;; ((and (fboundp 'ffip-project-root)
-                   ;;       (ffip-project-root)))
-                   ;; ((and (fboundp 'project-current)
-                   ;;       (fboundp 'project-root)
-                   ;;       (project-root (project-current))))
+                   ((fboundp 'projectile-project-root)
+                    (projectile-project-root))
+                   ((fboundp 'projectile-project-root)
+                    (projectile-project-root))
+                   ((fboundp 'ffip-project-root)
+                    (ffip-project-root))
+                   ((and (fboundp 'project-current)
+                         (fboundp 'project-root))
+                    (project-root (project-current)))
                    (t 'no-project)))
             (local-file-name
              (if (not (eq root 'no-project))

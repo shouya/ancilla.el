@@ -41,11 +41,11 @@
   :options '(chat))
 
 (defcustom ancilla-adaptor-chat-model
-  "gpt-3.5-turbo"
+  "gpt-4o-mini"
   "The model to use."
   :type 'string
   :group 'ancilla
-  :options '("gpt-3.5-turbo" "gpt-4"))
+  :options '("gpt-3.5-turbo" "gpt-4" "gpt-4o-mini"))
 
 (defcustom ancilla-adaptor-chat-api-endpoint
   "https://api.openai.com/v1/chat/completions"

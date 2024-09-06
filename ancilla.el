@@ -223,13 +223,13 @@ in the buffer saved in EXCURSION."
   (let* ((map (make-sparse-keymap)))
     (set-keymap-parent map query-replace-map)
     (define-key map [remap nextline]
-      (lambda nil (interactive)
-        (with-selected-window (get-buffer-window "*ancilla-diff*")
-          (scroll-up 1))))
+                (lambda nil (interactive)
+                  (with-selected-window (get-buffer-window "*ancilla-diff*")
+                    (scroll-up 1))))
     (define-key map [remap previous-line]
-      (lambda nil (interactive)
-        (with-selected-window (get-buffer-window "*ancilla-diff*")
-          (scroll-down 1))))
+                (lambda nil (interactive)
+                  (with-selected-window (get-buffer-window "*ancilla-diff*")
+                    (scroll-down 1))))
     map)
   "keymap to use for getting user confirmation")
 
@@ -464,36 +464,35 @@ replacement text as argument."
    "user"
    (concat "Visible portion on user's screen:\n\n"
            (plist-get buffer-context :before-selection)
-           "<|begin selection|>"
+           "<selection>"
            (plist-get buffer-context :selection)
-           "<|end selection|>"
+           "</selection>"
            (plist-get buffer-context :after-selection)
            ))
 
   ;; instruction
   (ancilla--adaptor-chat-request-buffer-append
    "user"
-   (concat "User selected the region marked by <|begin selection|>/<|end selection|> and asked:\n"
+   (concat "User selected the region marked by the <selection> tag and asked:\n"
            instruction
            "\n\nReply with your replacement for the selection. "
-           "Your response must begin with <|begin replacement|> "
-           "and stop at <|end replacement|>. "
-           "Do not include updated code. Preserve original indentation."))
+           "You should reply with the replacement text between <replacement></replacement> tags. "
+           "Preserve original indentation."))
 
   (ancilla--adaptor-chat-request-buffer-send
    (lambda (message)
      (let ((replacement (ancilla--adaptor-chat-get-text-between
                          message
-                         "<|begin replacement|>" "<|end replacement|>")))
+                         "<replacement>" "</replacement>")))
        (funcall callback replacement)))))
 
 (cl-defun ancilla--adaptor-chat-ask (&key instruction buffer-context callback)
   "Ask question about selected code using the chat adaptor.
 
-INSTRUCTION: The instruction to follow when rewriting the code.
-BUFFER-CONTEXT: The context about what needs to be rewritten.
-CALLBACK: The function to call when AI returns.  It accepts the
-replacement text as argument."
+           INSTRUCTION: The instruction to follow when rewriting the code.
+           BUFFER-CONTEXT: The context about what needs to be rewritten.
+           CALLBACK: The function to call when AI returns.  It accepts the
+           replacement text as argument."
   (ancilla--adaptor-chat-request-buffer-reset)
 
   ;; context prompt
@@ -508,16 +507,16 @@ replacement text as argument."
    "user"
    (concat "Visible portion on user's screen:\n\n"
            (plist-get buffer-context :before-selection)
-           "<|begin selection|>"
+           "<selection>"
            (plist-get buffer-context :selection)
-           "<|end selection|>"
+           "</selection>"
            (plist-get buffer-context :after-selection)
            ))
 
   ;; instruction
   (ancilla--adaptor-chat-request-buffer-append
    "user"
-   (concat "User selected the region marked by <|begin selection|>/<|end selection|> and asked:\n"
+   (concat "User selected the region marked by <selection> tag and asked:\n"
            instruction))
 
   (ancilla--adaptor-chat-request-buffer-send (lambda (message)
@@ -531,10 +530,10 @@ replacement text as argument."
     (&key instruction buffer-context callback)
   "Generate code using the chat adaptor.
 
-INSTRUCTION: The instruction to follow when rewriting the code.
-BUFFER-CONTEXT: The context about what needs to be rewritten.
-CALLBACK: The function to call when AI returns.  It accepts the
-generated text as argument."
+           INSTRUCTION: The instruction to follow when rewriting the code.
+           BUFFER-CONTEXT: The context about what needs to be rewritten.
+           CALLBACK: The function to call when AI returns.  It accepts the
+           generated text as argument."
   (ancilla--adaptor-chat-request-buffer-reset)
 
   ;; context prompt
@@ -549,25 +548,24 @@ generated text as argument."
    "user"
    (concat "Visible portion on user's screen:\n\n"
            (plist-get buffer-context :before-selection)
-           "<|cursor|>"
+           "<cursor/>"
            (plist-get buffer-context :after-selection)))
 
   ;; instruction
   (ancilla--adaptor-chat-request-buffer-append
    "user"
-   (concat "User placed their cursor at <|cursor|> and asked:\n"
+   (concat "User placed their cursor at <cursor/> and asked:\n"
            instruction
            "\n\n"
            "Reply with the desired insertion at cursor. "
-           "Begin your reply with <|begin insertion|> and "
-           "stop at <|end insertion|>. "
+           "Put your insertion between <insertion></insertion>. "
            "Preserve original indentation."))
 
   (ancilla--adaptor-chat-request-buffer-send
    (lambda (message)
      (let ((insertion (ancilla--adaptor-chat-get-text-between
                        message
-                       "<|begin insertion|>" "<|end insertion|>")))
+                       "<insertion>" "</insertion>")))
        (funcall callback insertion)))))
 
 (defface ancilla-chat-message-separator
@@ -582,7 +580,7 @@ generated text as argument."
 
 (defface ancilla-chat-message-delimiter
   '((t :inherit font-lock-variable-name-face))
-  "The face in *ancilla-chat* buffer for the delimiters, e.g. \"<|begin replacement|>\"."
+  "The face in *ancilla-chat* buffer for the delimiters, e.g. \"<replacement>\"."
   :group 'ancilla)
 
 (defface ancilla-chat-message-quoted
@@ -595,7 +593,7 @@ generated text as argument."
 (defvar ancilla-chat-message-role-face 'ancilla-chat-message-role
   "The face used in *ancilla-chat* buffer for the roles, e.g. \"USER>\".")
 (defvar ancilla-chat-message-delimiter-face 'ancilla-chat-message-delimiter
-  "The face in *ancilla-chat* buffer for the delimiters, e.g. \"<|begin replacement|>\".")
+  "The face in *ancilla-chat* buffer for the delimiters, e.g. \"<replacement>\".")
 (defvar ancilla-chat-message-quoted-face 'ancilla-chat-message-quoted
   "The face in *ancilla-chat* buffer for quoted texts.")
 
@@ -606,13 +604,17 @@ generated text as argument."
 (defvar ancilla-chat-mode-keywords
   `((,(rx bol (or "USER" "SYSTEM" "ASSISTANT") ">")
      . ancilla-chat-message-role-face)
-    (,(rx (seq "<|begin " (group (+ word)) "|>")
+    (,(rx (seq "<insertion>")
           (group (*? anychar))
-          (seq "<|end " (backref 1) "|>"))
+          (seq "</insertion>"))
      . (2 ancilla-chat-message-quoted-face t))
-    (,(rx (or (seq "<|begin " (+ word) "|>")
-              (seq "<|end " (+ word) "|>")
-              (seq "<|cursor|>")))
+    (,(rx (seq "<replacement>")
+          (group (*? anychar))
+          (seq "</replacement>"))
+     . (2 ancilla-chat-message-quoted-face t))
+    (,(rx (or (seq "<insertion>") (seq "</insertion>")
+              (seq "<replacement>") (seq "</replacement>")
+              (seq "<cursor/>")))
      . ancilla-chat-message-delimiter-face)))
 
 (define-derived-mode ancilla-chat-mode fundamental-mode "A/Chat"

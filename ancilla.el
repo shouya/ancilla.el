@@ -2,7 +2,7 @@
 
 ;; Author: Shou Ya <shouya@users.noreply.github.com>
 ;; Version: 1.0
-;; Package-Requires: ((emacs "27") f)
+;; Package-Requires: ((emacs "27") f transient)
 ;; Homepage: https://github.com/shouya/ancilla.el
 
 ;;; Commentary:
@@ -26,6 +26,7 @@
 (require 'files)
 (require 'let-alist)
 (require 'f)
+(require 'transient)
 
 (defvar url-http-end-of-headers)
 
@@ -45,7 +46,7 @@
   "The model to use."
   :type 'string
   :group 'ancilla
-  :options '("gpt-3.5-turbo" "gpt-4" "gpt-4o-mini"))
+  :options '("gpt-3.5-turbo" "gpt-4" "gpt-4o" "gpt-4o-mini"))
 
 (defcustom ancilla-adaptor-chat-api-endpoint
   "https://api.openai.com/v1/chat/completions"
@@ -111,9 +112,61 @@ call `ancilla-rewrite' otherwise."
   (interactive)
   (ancilla--call-adaptor-with-instruction 'rewrite))
 
+;; shortcuts following intellij copilot plugin
+
+(defun ancilla-simplify-this ()
+  "Simplify the current selection."
+  (interactive)
+  (ancilla--process-rewrite "Simplify this"))
+
+(defun ancilla-fix-this ()
+  "Fix the current selection."
+  (interactive)
+  (ancilla--process-rewrite "Fix this"))
+
+(defun ancilla-explain-this ()
+  "Explain the current selection."
+  (interactive)
+  (ancilla--process-ask "Explain this"))
+
+(defun ancilla-generate-unit-tests ()
+  "Generate unit tests for the current selection."
+  (interactive)
+  (ancilla--process-rewrite "Append unit tests after this code"))
+
+(defun ancilla-generate-docs ()
+  "Generate documentation for the current selection."
+  (interactive)
+  (ancilla--process-rewrite "Generate documentation for this code"))
+
+(defun ancilla-review-diff (arg)
+  "Review the diff. can be used with magit revision / diff buffer"
+  (interactive "P")
+  (if arg (mark-whole-buffer)) ;; if C-u pressed, review the whole buffer, otherwise, only review the visible part or selected region
+  (ancilla--process-ask "Review the diff and identify potential issue"))
+
+;; ------------ TRANSIENT MENU ---------------
+(transient-define-prefix ancilla-transient-menu ()
+  "Ancilla Commands"
+  ["Ancilla: Your AI Coding Assistant"
+   ["Human language input"
+    ("g" "Generate or rewrite" ancilla-generate-or-rewrite)
+    ("a" "Ask" ancilla-ask)
+    ]
+   ["Refactor"
+    ("s" "Simplify" ancilla-simplify-this)
+    ("f" "Fix" ancilla-fix-this)
+    ]
+   ["Generate"
+    ("u" "Generate Unit Tests" ancilla-generate-unit-tests)
+    ("d" "Generate Docs" ancilla-generate-docs)
+    ]
+   ["Explain"
+    ("e" "Explain" ancilla-explain-this)
+    ("r" "Review diff" ancilla-review-diff)
+    ]])
+
 ;; ------------ PRIVATE FUNCTIONS --------------
-
-
 (defun ancilla--process-instruction (instruction mode)
   "Process the given INSTRUCTION with the specified MODE."
   (let* ((buffer-context (ancilla--get-buffer-context))
@@ -300,8 +353,6 @@ buffers and displays the result in a buffer named
 Return a relative path when a project is detected."
   (if-let* ((file-name (buffer-file-name))
             (root (cond
-                   ((fboundp 'projectile-project-root)
-                    (projectile-project-root))
                    ((fboundp 'projectile-project-root)
                     (projectile-project-root))
                    ((fboundp 'ffip-project-root)

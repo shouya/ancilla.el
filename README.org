@@ -51,7 +51,7 @@ For most of the cases, you only need to invoke =ancilla-generate-or-rewrite=. It
 
 Inspect the =*ancilla-chat*= buffer for the full conversation sent to OpenAI.
 
-Transient menu (ancilla-transient-menu)
+Transient menu (=ancilla-transient-menu=)
 
 [[file:./transient_menu.png]]
 

@@ -46,7 +46,7 @@
   "The model to use."
   :type 'string
   :group 'ancilla
-  :options '("gpt-3.5-turbo" "gpt-4" "gpt-4o" "gpt-4o-mini"))
+  :options '("gpt-3.5-turbo" "gpt-4" "gpt-4o" "gpt-4o-mini")) ;; more models available at https://platform.openai.com/docs/models
 
 (defcustom ancilla-adaptor-chat-api-endpoint
   "https://api.openai.com/v1/chat/completions"

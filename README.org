@@ -10,12 +10,18 @@ Enhance your coding experience with code generation, rewriting, and interactive 
 
 - Generate code at the cursor with instructions
 - Rewrite the selected region with instructions
-- Discuss selected code (not implemented yet)
+- Discuss selected code
 - AI understands the full context displayed on the screen
   + AI sees the visible part of the current buffer, not just the selected region
   + Inspect the raw conversation in the =*ancilla-chat*= buffer
 - Review diffs before applying rewrites (can be disabled with the =ancilla-show-confirmation= customization)
 - Asynchronous requests (can be disabled with the =ancilla-async= customization)
+- Shortcut functions mimic intellij github copilot menu
+  - simplify / fix code
+  - generate doc, unit-test
+  - explain code
+  - review diff (can be used with magit revision / diff buffer)
+- A transient menu for easy access to all commands
 
 The architecture is designed to support any AI backends. Currently, only the =chat= adaptor is implemented, which utilizes OpenAI's chat completion (ChatGPT and GPT4 supported).
 
@@ -29,10 +35,11 @@ The architecture is designed to support any AI backends. Currently, only the =ch
   ;; ancilla-rewrite depending on whether there is an active
   ;; selection.
   :bind ("C-x C-r" . ancilla-generate-or-rewrite)
+  :bind ("C-x C-m" . ancilla-transient-menu) ;; provide shorts like intellij copilot plugins
 
   :custom
-  ;; Defaults to gpt-3.5-turbo, you can opt to use gpt-4.
-  ;; (ancilla-adaptor-chat-model "gpt-4")
+  ;; Defaults to gpt-3.5-turbo, you can opt to use gpt-4o-mini or other.
+  ;; (ancilla-adaptor-chat-model "gpt-4o-mini")
 
   ;; Set your API key
   (ancilla-adaptor-chat-openai-api-key "sk-XXXXXXXXXXXXXXXX"))
@@ -43,6 +50,10 @@ The architecture is designed to support any AI backends. Currently, only the =ch
 For most of the cases, you only need to invoke =ancilla-generate-or-rewrite=. It will call =ancilla-rewrite= when there is an active region, and call =ancilla-generate otherwise=.
 
 Inspect the =*ancilla-chat*= buffer for the full conversation sent to OpenAI.
+
+Transient menu (ancilla-transient-menu)
+
+[[file:./transient_menu.png]]
 
 ** Tips
 

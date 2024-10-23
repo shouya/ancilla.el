@@ -219,7 +219,7 @@ call `ancilla-rewrite' otherwise."
                      (plist-get buffer-context :excursion)
                      (plist-get buffer-context :selection)))
 
-   ((eq mode '(ask))
+   ((eq mode 'ask)
     ;; ignore the message and switch to ancilla-chat. we should do
     ;; more than this in the future.
     (lambda (message)

@@ -365,7 +365,8 @@ Return a relative path when a project is detected."
                    ((fboundp 'ffip-project-root)
                     (ffip-project-root))
                    ((and (fboundp 'project-current)
-                         (fboundp 'project-root))
+                         (fboundp 'project-root)
+                         (project-current))
                     (project-root (project-current)))
                    (t 'no-project)))
             (local-file-name

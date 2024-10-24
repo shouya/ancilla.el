@@ -41,6 +41,13 @@
   :group 'ancilla
   :options '(chat))
 
+(defcustom ancilla-chat-backend
+  'openai
+  "The backend to use for the chat adaptor."
+  :type 'symbol
+  :group 'ancilla
+  :options '(openai))
+
 (defcustom ancilla-adaptor-chat-model
   "gpt-4o-mini"
   "The model to use."
@@ -48,7 +55,7 @@
   :group 'ancilla
   :options '("gpt-3.5-turbo" "gpt-4" "gpt-4o" "gpt-4o-mini")) ;; more models available at https://platform.openai.com/docs/models
 
-(defcustom ancilla-adaptor-chat-api-endpoint
+(defcustom ancilla-openai-api-chat-endpoint
   "https://api.openai.com/v1/chat/completions"
   "API endpoint for the OpenAI chat completions."
   :type 'string
@@ -470,36 +477,17 @@ ROLE and TEXT."
                   'ancilla-adaptor-chat-openai-api-key)))
 
 (defun ancilla--adaptor-chat-request-buffer-send (callback)
-  "Send the conversation in *ancilla-chat* to `ancilla-adaptor-chat-api-endpoint'.
+  "Send the conversation in *ancilla-chat* to `ancilla-openai-api-chat-endpoint'.
 
 CALLBACK should take the assistant's reply (string) as the only
 argument."
-  (let* ((url-request-method "POST")
-         (url-request-extra-headers
-          `(("Content-Type" . "application/json")
-            ("Authorization" .
-             ,(concat "Bearer " (ancilla--adaptor-chat-openai-api-key)))))
-         (messages (mapcar (lambda (x) `(("role" . ,(car x))
-                                         ("content" . ,(cdr x))))
-                           (ancilla--adaptor-chat-request-buffer-parse)))
-         (url-request-data
-          (json-encode
-           `(:model ,ancilla-adaptor-chat-model
-                    :messages ,messages
-                    :temperature 0.1))))
-    (ancilla--request-and-extract-json
-     :url ancilla-adaptor-chat-api-endpoint
-     :callback
-     (lambda (json)
-       ;; insert the response
-       (ancilla--adaptor-chat-request-buffer-append
-        "assistant"
-        (ancilla--adaptor-chat-extract-content json))
 
-       ;; parse the response
-       (pcase (last (ancilla--adaptor-chat-request-buffer-parse))
-         (`(("assistant" . ,message))
-          (funcall callback message)))))))
+  (let ((messages (mapcar (lambda (x) `(("role" . ,(car x))
+                                        ("content" . ,(cdr x))))
+                          (ancilla--adaptor-chat-request-buffer-parse)))
+        (backend (get 'chat 'ancilla-backend))
+        (request-fn (get ancilla-chat-backend 'request)))
+    (funcall request-fn messages callback)))
 
 (cl-defun ancilla--adaptor-chat-rewrite
     (&key instruction buffer-context callback)
@@ -624,6 +612,41 @@ replacement text as argument."
                        "<insertion>" "</insertion>")))
        (funcall callback insertion)))))
 
+;; ---- PRIVATE FUNCTIONS FOR ADAPTOR BACKEND: OpenAI -----
+
+(defun ancilla--adaptor-chat-openai-request (messages callback)
+  "Send the conversation to OpenAI chat completion API.
+
+MESSAGES is a list of (ROLE . TEXT) pairs, where ROLE is one of \"system\",\"user\",\"assistant\".
+
+CALLBACK should take the assistant's reply (string) as the only
+argument."
+  (let* ((url-request-method "POST")
+         (url-request-extra-headers
+          `(("Content-Type" . "application/json")
+            ("Authorization" .
+             ,(concat "Bearer " (ancilla--adaptor-chat-openai-api-key)))))
+         (url-request-data
+          (json-encode
+           `(:model ,ancilla-adaptor-chat-model
+                    :messages ,messages
+                    :temperature 0.1))))
+    (ancilla--request-and-extract-json
+     :url ancilla-openai-api-chat-endpoint
+     :callback
+     (lambda (json)
+       ;; insert the response
+       (ancilla--adaptor-chat-request-buffer-append
+        "assistant"
+        (ancilla--adaptor-chat-extract-content json))
+
+       ;; parse the response
+       (pcase (last (ancilla--adaptor-chat-request-buffer-parse))
+         (`(("assistant" . ,message))
+          (funcall callback message)))))))
+
+;; ---- STYLES AND FACES FOR *ancilla-chat* BUFFER -----
+
 (defface ancilla-chat-message-separator
   '((t :foreground "darkred" :bold t))
   "The face in *ancilla-chat* buffer for the separators between messages."
@@ -687,8 +710,10 @@ replacement text as argument."
 (put 'chat 'ancilla-rewrite 'ancilla--adaptor-chat-rewrite)
 (put 'chat 'ancilla-generate 'ancilla--adaptor-chat-generate)
 (put 'chat 'ancilla-ask 'ancilla--adaptor-chat-ask)
-
 (put 'chat 'ancilla-hooks '(ancilla--adaptor-chat-show-request-message))
+(put 'chat 'ancilla-backend ancilla-chat-backend)
+
+(put 'openai 'request 'ancilla--adaptor-chat-openai-request)
 
 (provide 'ancilla)
 
